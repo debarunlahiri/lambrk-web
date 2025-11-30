@@ -2,6 +2,8 @@
 
 A modern, dark-themed landing page for a next-generation video streaming platform built with Next.js, featuring fluid animations and responsive design.
 
+**Website**: [lambrk.com](https://lambrk.com)
+
 ## Features
 
 - **Dark Theme Design**: Beautiful black/dark mode interface with subtle gradients and animations
@@ -147,5 +149,6 @@ SOFTWARE.
 
 ## Contact
 
-Email: debarunlahiri2016@gmail.com
+- **Website**: [lambrk.com](https://lambrk.com)
+- **Email**: debarunlahiri2016@gmail.com
 

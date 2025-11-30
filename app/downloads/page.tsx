@@ -34,12 +34,16 @@ export default function DownloadsPage() {
     },
   }
 
-  // Mock download items - replace with actual data
+  // Download items
   const downloadItems = [
-    { id: 1, title: 'Sample Video 1', size: '2.5 GB', status: 'completed', date: '2024-01-15', type: 'video' },
-    { id: 2, title: 'Sample Video 2', size: '1.8 GB', status: 'downloading', progress: 65, date: '2024-01-14', type: 'video' },
-    { id: 3, title: 'Sample Image 1', size: '45 MB', status: 'completed', date: '2024-01-13', type: 'image' },
-    { id: 4, title: 'Sample Video 3', size: '3.2 GB', status: 'pending', date: '2024-01-12', type: 'video' },
+    { 
+      id: 1, 
+      title: 'STT Models', 
+      size: 'Download', 
+      date: new Date().toLocaleDateString(), 
+      type: 'file',
+      downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/stt-models.zip'
+    },
   ]
 
   return (
@@ -107,43 +111,46 @@ export default function DownloadsPage() {
                     </div>
                   </div>
                   <div className="ml-4 flex gap-2">
-                    {item.status === 'completed' && (
-                      <>
-                        {item.type === 'video' ? (
-                          <>
-                            <motion.button
-                              className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors"
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              Play
-                            </motion.button>
-                            <motion.button
-                              className="px-4 py-2 bg-dark-surface border border-gray-700 rounded-lg text-gray-300 text-sm font-medium hover:border-blue-500/50 hover:text-blue-400 transition-colors"
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              Download
-                            </motion.button>
-                          </>
-                        ) : (
-                          <motion.button
-                            className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            View
-                          </motion.button>
-                        )}
-                      </>
-                    )}
-                    {item.status !== 'completed' && item.type === 'video' && (
-                      <motion.button
-                        className="px-4 py-2 bg-dark-surface border border-gray-700 rounded-lg text-gray-300 text-sm font-medium hover:border-blue-500/50 hover:text-blue-400 transition-colors"
+                    {item.type === 'file' && item.downloadUrl && (
+                      <motion.a
+                        href={item.downloadUrl}
+                        download
+                        className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors inline-block"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                       >
                         Download
+                      </motion.a>
+                    )}
+                    {item.type === 'video' && (
+                      <>
+                        <motion.button
+                          className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Play
+                        </motion.button>
+                        {item.downloadUrl && (
+                          <motion.a
+                            href={item.downloadUrl}
+                            download
+                            className="px-4 py-2 bg-dark-surface border border-gray-700 rounded-lg text-gray-300 text-sm font-medium hover:border-blue-500/50 hover:text-blue-400 transition-colors inline-block"
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                          >
+                            Download
+                          </motion.a>
+                        )}
+                      </>
+                    )}
+                    {item.type === 'image' && (
+                      <motion.button
+                        className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        View
                       </motion.button>
                     )}
                   </div>

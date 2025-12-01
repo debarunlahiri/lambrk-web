@@ -44,6 +44,14 @@ export default function DownloadsPage() {
       type: 'file',
       downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/stt-models.zip'
     },
+    { 
+      id: 2, 
+      title: 'STT Backend', 
+      size: 'Download', 
+      date: new Date().toLocaleDateString(), 
+      type: 'file',
+      downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/stt-backend.zip'
+    },
   ]
 
   return (

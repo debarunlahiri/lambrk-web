@@ -52,6 +52,14 @@ export default function DownloadsPage() {
       type: 'file',
       downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/stt-backend.zip'
     },
+    { 
+      id: 3, 
+      title: 'Argos Translate', 
+      size: 'Download', 
+      date: new Date().toLocaleDateString(), 
+      type: 'file',
+      downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/argos-translate.zip'
+    },
   ]
 
   return (

@@ -60,6 +60,14 @@ export default function DownloadsPage() {
       type: 'file',
       downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/argos-translate.zip'
     },
+    { 
+      id: 4, 
+      title: 'Stanza Resources', 
+      size: 'Download', 
+      date: new Date().toLocaleDateString(), 
+      type: 'file',
+      downloadUrl: 'https://lam-brk.s3.ap-south-1.amazonaws.com/stanza_resources.zip'
+    },
   ]
 
   return (

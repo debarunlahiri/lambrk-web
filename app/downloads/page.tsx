@@ -227,8 +227,7 @@ export default function DownloadsPage() {
                   </svg>
                 ),
                 onClick: (e: React.MouseEvent<HTMLAnchorElement>) => {
-                  e.preventDefault()
-                  window.location.href = '/'
+                  // Let Link handle navigation
                 }
               },
               { 

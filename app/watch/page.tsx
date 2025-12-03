@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -24,7 +24,7 @@ interface Video {
   description?: string
 }
 
-export default function WatchPage() {
+function WatchContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const videoId = searchParams.get('v')
@@ -477,3 +477,14 @@ export default function WatchPage() {
   )
 }
 
+export default function WatchPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-dark-bg flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </main>
+    }>
+      <WatchContent />
+    </Suspense>
+  )
+}

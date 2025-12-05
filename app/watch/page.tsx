@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -24,6 +24,27 @@ interface Video {
   description?: string
 }
 
+interface Comment {
+  id: number
+  author: string
+  authorAvatar?: string
+  text: string
+  likes: number
+  dislikes: number
+  time: string
+  userLiked?: boolean
+  userDisliked?: boolean
+  replies?: Comment[]
+}
+
+interface Playlist {
+  id: number
+  name: string
+  isPublic: boolean
+  videoCount: number
+  isWatchLater?: boolean
+}
+
 function WatchContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -36,6 +57,55 @@ function WatchContent() {
   const [likes, setLikes] = useState(12400)
   const [dislikes, setDislikes] = useState(320)
   const [userLike, setUserLike] = useState<'liked' | 'disliked' | null>(null)
+  const [shareMenuOpen, setShareMenuOpen] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
+  const [timestampCopied, setTimestampCopied] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [playlistMenuOpen, setPlaylistMenuOpen] = useState(false)
+  const [playlists, setPlaylists] = useState<Playlist[]>([
+    { id: 1, name: 'My Favorites', isPublic: false, videoCount: 12 },
+    { id: 2, name: 'Tech Videos', isPublic: true, videoCount: 8 },
+    { id: 3, name: 'Tutorials', isPublic: false, videoCount: 15 },
+  ])
+  const [showCreatePlaylist, setShowCreatePlaylist] = useState(false)
+  const [newPlaylistName, setNewPlaylistName] = useState('')
+  const [newPlaylistIsPublic, setNewPlaylistIsPublic] = useState(false)
+  const [playlistError, setPlaylistError] = useState('')
+  const [playlistSuccess, setPlaylistSuccess] = useState(false)
+  const [comments, setComments] = useState<Comment[]>([
+    {
+      id: 1,
+      author: 'John Doe',
+      text: 'Great video! Really enjoyed the content. Keep up the good work!',
+      likes: 245,
+      dislikes: 12,
+      time: '2 hours ago',
+      userLiked: false,
+      userDisliked: false,
+    },
+    {
+      id: 2,
+      author: 'Jane Smith',
+      text: 'This is exactly what I was looking for. Thanks for sharing!',
+      likes: 189,
+      dislikes: 5,
+      time: '5 hours ago',
+      userLiked: false,
+      userDisliked: false,
+    },
+    {
+      id: 3,
+      author: 'Tech Enthusiast',
+      text: 'Amazing quality and production value. The 8K resolution looks incredible!',
+      likes: 312,
+      dislikes: 8,
+      time: '1 day ago',
+      userLiked: true,
+      userDisliked: false,
+    },
+  ])
+  const [newComment, setNewComment] = useState('')
 
   useEffect(() => {
     setIsLoaded(true)
@@ -46,6 +116,137 @@ function WatchContent() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+
+  useEffect(() => {
+    if (!shareMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('.share-menu-container')) {
+        setShareMenuOpen(false)
+      }
+    }
+
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside)
+    }, 0)
+
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [shareMenuOpen])
+
+  useEffect(() => {
+    if (!playlistMenuOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      if (!target.closest('.playlist-menu-container')) {
+        setPlaylistMenuOpen(false)
+        setShowCreatePlaylist(false)
+        setNewPlaylistName('')
+        setNewPlaylistIsPublic(false)
+        setPlaylistError('')
+        setPlaylistSuccess(false)
+      }
+    }
+
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside)
+    }, 100)
+
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [playlistMenuOpen])
+
+  const sortedPlaylists = () => {
+    const watchLater = playlists.find(p => p.isWatchLater)
+    const others = playlists.filter(p => !p.isWatchLater)
+    return watchLater ? [watchLater, ...others] : others
+  }
+
+  const handleSaveToPlaylist = (playlistId: number) => {
+    setPlaylists(playlists.map(p => 
+      p.id === playlistId 
+        ? { ...p, videoCount: p.videoCount + 1 }
+        : p
+    ))
+    setPlaylistMenuOpen(false)
+  }
+
+  const handleSaveToWatchLater = () => {
+    const watchLater = playlists.find(p => p.isWatchLater)
+    if (watchLater) {
+      handleSaveToPlaylist(watchLater.id)
+    } else {
+      const maxId = playlists.length > 0 ? Math.max(...playlists.map(p => p.id)) : 0
+      const newWatchLater: Playlist = {
+        id: maxId + 1,
+        name: 'Watch later',
+        isPublic: false,
+        videoCount: 1,
+        isWatchLater: true,
+      }
+      setPlaylists([newWatchLater, ...playlists])
+      setPlaylistMenuOpen(false)
+    }
+  }
+
+  const handleCreatePlaylist = () => {
+    const trimmedName = newPlaylistName.trim()
+    setPlaylistError('')
+    
+    if (!trimmedName) {
+      setPlaylistError('Playlist name cannot be empty')
+      return
+    }
+
+    if (trimmedName.length > 100) {
+      setPlaylistError('Playlist name must be 100 characters or less')
+      return
+    }
+
+    const nameExists = playlists.some(
+      p => p.name.toLowerCase() === trimmedName.toLowerCase()
+    )
+    
+    if (nameExists) {
+      setPlaylistError('A playlist with this name already exists')
+      return
+    }
+
+    const maxId = playlists.length > 0 ? Math.max(...playlists.map(p => p.id)) : 0
+    const newPlaylist: Playlist = {
+      id: maxId + 1,
+      name: trimmedName,
+      isPublic: newPlaylistIsPublic,
+      videoCount: 1,
+    }
+    
+    setPlaylists(prevPlaylists => [...prevPlaylists, newPlaylist])
+    setPlaylistSuccess(true)
+    
+    setTimeout(() => {
+      setNewPlaylistName('')
+      setNewPlaylistIsPublic(false)
+      setShowCreatePlaylist(false)
+      setPlaylistMenuOpen(false)
+      setPlaylistError('')
+      setPlaylistSuccess(false)
+    }, 1500)
+  }
+
+  const handleCancelCreatePlaylist = () => {
+    setShowCreatePlaylist(false)
+    setNewPlaylistName('')
+    setNewPlaylistIsPublic(false)
+    setPlaylistError('')
+    setPlaylistSuccess(false)
+  }
 
   const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault()
@@ -145,6 +346,121 @@ function WatchContent() {
 
   const currentVideo = videos.find(v => v.id === Number(videoId)) || videos[0]
   const relatedVideos = videos.filter(v => v.id !== currentVideo.id).slice(0, 4)
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video) return
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(video.currentTime)
+    }
+
+    video.addEventListener('timeupdate', handleTimeUpdate)
+
+    const timestamp = searchParams.get('t')
+    if (timestamp) {
+      const time = parseInt(timestamp, 10)
+      if (!isNaN(time) && time > 0) {
+        video.currentTime = time
+      }
+    }
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate)
+    }
+  }, [searchParams, currentVideo.id])
+
+  const getVideoUrl = (includeTimestamp?: boolean) => {
+    if (typeof window !== 'undefined') {
+      let url = `${window.location.origin}/watch?v=${currentVideo.id}`
+      if (includeTimestamp && currentTime > 0) {
+        const seconds = Math.floor(currentTime)
+        url += `&t=${seconds}`
+      }
+      return url
+    }
+    return ''
+  }
+
+  const copyToClipboard = async () => {
+    const url = getVideoUrl()
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+      setShareMenuOpen(false)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
+  const copyToClipboardWithTimestamp = async () => {
+    const url = getVideoUrl(true)
+    try {
+      await navigator.clipboard.writeText(url)
+      setTimestampCopied(true)
+      setShareMenuOpen(false)
+      setTimeout(() => setTimestampCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
+
+  const shareViaNative = async () => {
+    const url = getVideoUrl()
+    const shareData = {
+      title: currentVideo.title,
+      text: `Check out this video: ${currentVideo.title}`,
+      url: url,
+    }
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        const canShare = typeof navigator.canShare === 'function' ? navigator.canShare(shareData) : true
+        if (canShare) {
+          await navigator.share(shareData)
+          setShareMenuOpen(false)
+        } else {
+          copyToClipboard()
+        }
+      } else {
+        copyToClipboard()
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('Error sharing:', err)
+        copyToClipboard()
+      }
+    }
+  }
+
+  const shareToTwitter = () => {
+    const url = getVideoUrl()
+    const text = encodeURIComponent(`Check out this video: ${currentVideo.title}`)
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${encodeURIComponent(url)}`, '_blank')
+    setShareMenuOpen(false)
+  }
+
+  const shareToFacebook = () => {
+    const url = getVideoUrl()
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank')
+    setShareMenuOpen(false)
+  }
+
+  const shareToReddit = () => {
+    const url = getVideoUrl()
+    const title = encodeURIComponent(currentVideo.title)
+    window.open(`https://reddit.com/submit?url=${encodeURIComponent(url)}&title=${title}`, '_blank')
+    setShareMenuOpen(false)
+  }
+
+  const shareViaEmail = () => {
+    const url = getVideoUrl()
+    const subject = encodeURIComponent(`Check out this video: ${currentVideo.title}`)
+    const body = encodeURIComponent(`I thought you might like this video:\n\n${currentVideo.title}\n${url}`)
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
+    setShareMenuOpen(false)
+  }
 
   const sidebarItems = [
     { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', active: false },
@@ -308,6 +624,7 @@ function WatchContent() {
                 {/* Video Player */}
                 <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
                   <video
+                    ref={videoRef}
                     className="w-full h-full"
                     controls
                     autoPlay={isPlaying}
@@ -384,18 +701,271 @@ function WatchContent() {
                           <span className="text-sm">{dislikes.toLocaleString()}</span>
                         </button>
                       </div>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                        </svg>
-                        <span className="text-sm">Share</span>
-                      </button>
-                      <button className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span className="text-sm">Download</span>
-                      </button>
+                      <div className="relative share-menu-container">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setShareMenuOpen(!shareMenuOpen)
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                          <span className="text-sm">Share</span>
+                        </button>
+
+                        {/* Share Menu Dropdown */}
+                        {shareMenuOpen && (
+                          <div 
+                            className="absolute right-0 mt-2 w-64 bg-gray-800 rounded-lg shadow-xl z-20 border border-gray-700"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                              <div className="p-2">
+                                {/* Native Share (if available) */}
+                                {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                                  <button
+                                    onClick={shareViaNative}
+                                    className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                  >
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                    </svg>
+                                    <span className="text-sm">Share via...</span>
+                                  </button>
+                                )}
+
+                                {/* Copy Link */}
+                                <button
+                                  onClick={copyToClipboard}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className="text-sm">{linkCopied ? 'Link copied!' : 'Copy link'}</span>
+                                </button>
+
+                                {/* Copy Link with Timestamp */}
+                                <button
+                                  onClick={copyToClipboardWithTimestamp}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  <span className="text-sm">
+                                    {timestampCopied ? 'Link with timestamp copied!' : currentTime > 0 ? `Copy link at ${Math.floor(currentTime / 60)}:${String(Math.floor(currentTime % 60)).padStart(2, '0')}` : 'Copy link at current time'}
+                                  </span>
+                                </button>
+
+                                <div className="border-t border-gray-700 my-2" />
+
+                                {/* Social Media Options */}
+                                <button
+                                  onClick={shareToTwitter}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" />
+                                  </svg>
+                                  <span className="text-sm">Share to Twitter</span>
+                                </button>
+
+                                <button
+                                  onClick={shareToFacebook}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                                  </svg>
+                                  <span className="text-sm">Share to Facebook</span>
+                                </button>
+
+                                <button
+                                  onClick={shareToReddit}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.963-.196-2.512-.73a.326.326 0 0 0-.232-.095z" />
+                                  </svg>
+                                  <span className="text-sm">Share to Reddit</span>
+                                </button>
+
+                                <button
+                                  onClick={shareViaEmail}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className="text-sm">Share via Email</span>
+                                </button>
+                              </div>
+                            </div>
+                        )}
+                      </div>
+                      <div className="relative playlist-menu-container">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setPlaylistMenuOpen(!playlistMenuOpen)
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                          </svg>
+                          <span className="text-sm">Save to playlist</span>
+                        </button>
+
+                        {/* Playlist Menu Dropdown */}
+                        {playlistMenuOpen && (
+                          <div 
+                            className="absolute right-0 mt-2 w-72 bg-gray-800 rounded-lg shadow-xl z-20 border border-gray-700"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="p-2 max-h-96 overflow-y-auto">
+                              {/* Watch Later - Always at top */}
+                              <button
+                                onClick={handleSaveToWatchLater}
+                                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                              >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span className="text-sm font-medium">Watch later</span>
+                              </button>
+
+                              <div className="border-t border-gray-700 my-2" />
+
+                              {/* Existing Playlists */}
+                              {sortedPlaylists().filter(p => !p.isWatchLater).map((playlist) => (
+                                <button
+                                  key={playlist.id}
+                                  onClick={() => handleSaveToPlaylist(playlist.id)}
+                                  className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                    </svg>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-sm font-medium truncate">{playlist.name}</div>
+                                      <div className="text-xs text-gray-400">
+                                        {playlist.videoCount} {playlist.videoCount === 1 ? 'video' : 'videos'} • {playlist.isPublic ? 'Public' : 'Private'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {playlist.isPublic && (
+                                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              ))}
+
+                              <div className="border-t border-gray-700 my-2" />
+
+                              {/* Create New Playlist */}
+                              {!showCreatePlaylist ? (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setShowCreatePlaylist(true)
+                                    setPlaylistError('')
+                                    setPlaylistSuccess(false)
+                                  }}
+                                  className="w-full flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-gray-700 text-white transition-colors text-left"
+                                >
+                                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  <span className="text-sm">Create new playlist</span>
+                                </button>
+                              ) : (
+                                <div className="px-4 py-3 space-y-3">
+                                  {playlistSuccess ? (
+                                    <div className="flex items-center gap-2 text-green-400 text-sm py-2">
+                                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                      <span>Playlist created and video added!</span>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div>
+                                        <input
+                                          type="text"
+                                          value={newPlaylistName}
+                                          onChange={(e) => {
+                                            setNewPlaylistName(e.target.value)
+                                            setPlaylistError('')
+                                          }}
+                                          placeholder="Playlist name"
+                                          maxLength={100}
+                                          className={`w-full bg-gray-700 border ${
+                                            playlistError ? 'border-red-500' : 'border-gray-600'
+                                          } text-white px-3 py-2 rounded-lg focus:outline-none focus:border-blue-500 text-sm`}
+                                          autoFocus
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              handleCreatePlaylist()
+                                            } else if (e.key === 'Escape') {
+                                              handleCancelCreatePlaylist()
+                                            }
+                                          }}
+                                        />
+                                        {playlistError && (
+                                          <p className="text-red-400 text-xs mt-1">{playlistError}</p>
+                                        )}
+                                        <p className="text-gray-500 text-xs mt-1">
+                                          {newPlaylistName.length}/100 characters
+                                        </p>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          id="playlist-public"
+                                          checked={newPlaylistIsPublic}
+                                          onChange={(e) => setNewPlaylistIsPublic(e.target.checked)}
+                                          className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                                        />
+                                        <label htmlFor="playlist-public" className="text-sm text-gray-300 cursor-pointer">
+                                          Make playlist public
+                                        </label>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleCreatePlaylist()
+                                          }}
+                                          disabled={!newPlaylistName.trim() || playlistSuccess}
+                                          className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-lg text-white font-semibold text-sm transition-colors"
+                                        >
+                                          Create
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleCancelCreatePlaylist()
+                                          }}
+                                          disabled={playlistSuccess}
+                                          className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:cursor-not-allowed rounded-lg text-white text-sm transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -421,6 +991,171 @@ function WatchContent() {
                       </p>
                     </div>
                   )}
+
+                  {/* Comments Section */}
+                  <div className="mt-6">
+                    <div className="mb-4">
+                      <h2 className="text-lg font-semibold text-white mb-6">
+                        {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
+                      </h2>
+                      
+                      {/* Add Comment Form */}
+                      <div className="flex gap-3 mb-6">
+                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                          {user.isLoggedIn && user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                        </div>
+                        <div className="flex-1">
+                          <textarea
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            placeholder="Add a comment..."
+                            className="w-full bg-transparent border-b border-gray-700 text-white placeholder-gray-500 pb-2 focus:outline-none focus:border-white resize-none"
+                            rows={1}
+                            onInput={(e) => {
+                              const target = e.target as HTMLTextAreaElement
+                              target.style.height = 'auto'
+                              target.style.height = `${target.scrollHeight}px`
+                            }}
+                          />
+                          <div className="flex justify-end gap-2 mt-2">
+                            <button
+                              onClick={() => setNewComment('')}
+                              className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (newComment.trim()) {
+                                  const comment: Comment = {
+                                    id: comments.length + 1,
+                                    author: user.isLoggedIn && user.name ? user.name : 'Anonymous',
+                                    text: newComment.trim(),
+                                    likes: 0,
+                                    dislikes: 0,
+                                    time: 'just now',
+                                    userLiked: false,
+                                    userDisliked: false,
+                                  }
+                                  setComments([comment, ...comments])
+                                  setNewComment('')
+                                }
+                              }}
+                              disabled={!newComment.trim()}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-full text-white font-semibold text-sm transition-colors"
+                            >
+                              Comment
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Comments List */}
+                    <div className="space-y-4">
+                      {comments.map((comment) => (
+                        <div key={comment.id} className="flex gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                            {comment.author.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <div className="mb-1">
+                              <span className="text-white font-semibold text-sm mr-2">
+                                {comment.author}
+                              </span>
+                              <span className="text-gray-400 text-sm">{comment.time}</span>
+                            </div>
+                            <p className="text-white text-sm mb-2">{comment.text}</p>
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    setComments(comments.map(c => {
+                                      if (c.id !== comment.id) return c
+                                      
+                                      if (c.userLiked) {
+                                        return {
+                                          ...c,
+                                          likes: c.likes - 1,
+                                          userLiked: false
+                                        }
+                                      } else {
+                                        const wasDisliked = c.userDisliked
+                                        return {
+                                          ...c,
+                                          likes: c.likes + 1,
+                                          dislikes: wasDisliked ? c.dislikes - 1 : c.dislikes,
+                                          userLiked: true,
+                                          userDisliked: false
+                                        }
+                                      }
+                                    }))
+                                  }}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+                                    comment.userLiked
+                                      ? 'text-blue-500 hover:text-blue-400'
+                                      : 'text-gray-400 hover:text-white'
+                                  }`}
+                                >
+                                  <svg 
+                                    className="w-5 h-5" 
+                                    fill={comment.userLiked ? 'currentColor' : 'none'} 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                                  </svg>
+                                  <span className="text-sm">{comment.likes}</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setComments(comments.map(c => {
+                                      if (c.id !== comment.id) return c
+                                      
+                                      if (c.userDisliked) {
+                                        return {
+                                          ...c,
+                                          dislikes: c.dislikes - 1,
+                                          userDisliked: false
+                                        }
+                                      } else {
+                                        const wasLiked = c.userLiked
+                                        return {
+                                          ...c,
+                                          dislikes: c.dislikes + 1,
+                                          likes: wasLiked ? c.likes - 1 : c.likes,
+                                          userDisliked: true,
+                                          userLiked: false
+                                        }
+                                      }
+                                    }))
+                                  }}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+                                    comment.userDisliked
+                                      ? 'text-red-500 hover:text-red-400'
+                                      : 'text-gray-400 hover:text-white'
+                                  }`}
+                                >
+                                  <svg 
+                                    className="w-5 h-5 rotate-180" 
+                                    fill={comment.userDisliked ? 'currentColor' : 'none'} 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                                  </svg>
+                                  <span className="text-sm">{comment.dislikes}</span>
+                                </button>
+                              </div>
+                              <button className="text-gray-400 hover:text-white text-sm transition-colors">
+                                Reply
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 

@@ -3,21 +3,17 @@
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Image from 'next/image'
-
-interface User {
-  isLoggedIn: boolean
-  name?: string
-  email?: string
-  profileImage?: string
-}
+import { useAuth } from './contexts/AuthContext'
 
 export default function Home() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, logout } = useAuth()
   const [isLoaded, setIsLoaded] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [user, setUser] = useState<User>({ isLoggedIn: false })
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
 
   const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
     if (pathname === '/') {
@@ -120,14 +116,16 @@ export default function Home() {
   ]
 
   const sidebarItems = [
-    { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', active: true },
-    { name: 'Trending', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
-    { name: 'Subscriptions', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
-    { name: 'Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
-    { name: 'History', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { name: 'Your videos', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z' },
-    { name: 'Watch later', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { name: 'Liked videos', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+    { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', active: true, requiresAuth: false },
+    { name: 'Trending', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6', requiresAuth: false },
+    ...(user.isLoggedIn ? [
+      { name: 'Subscriptions', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z', requiresAuth: true },
+      { name: 'Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', requiresAuth: true },
+      { name: 'History', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', requiresAuth: true },
+      { name: 'Your videos', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', requiresAuth: true },
+      { name: 'Watch later', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', requiresAuth: true },
+      { name: 'Liked videos', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z', requiresAuth: true },
+    ] : []),
   ]
 
   return (
@@ -173,29 +171,82 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
             </button>
-            <button className="p-1 sm:p-2 hover:bg-gray-800 rounded-full transition-colors">
+            <div className="relative">
               {!user.isLoggedIn ? (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-gray-600 flex items-center justify-center p-1 sm:p-1.5">
-                  <svg className="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-              ) : user.profileImage ? (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden bg-gray-700 border border-gray-600">
-                  <Image
-                    src={user.profileImage}
-                    alt={user.name || 'Profile'}
-                    width={28}
-                    height={28}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <Link href="/login">
+                  <button className="p-1 sm:p-2 hover:bg-gray-800 rounded-full transition-colors">
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-gray-600 flex items-center justify-center p-1 sm:p-1.5">
+                      <svg className="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  </button>
+                </Link>
               ) : (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xs sm:text-sm border border-blue-400">
-                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                </div>
+                <>
+                  <button
+                    onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                    className="p-1 sm:p-2 hover:bg-gray-800 rounded-full transition-colors"
+                  >
+                    {user.profileImage ? (
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden bg-gray-700 border border-gray-600">
+                        <Image
+                          src={user.profileImage}
+                          alt={user.name || 'Profile'}
+                          width={28}
+                          height={28}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xs sm:text-sm border border-blue-400">
+                        {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                    )}
+                  </button>
+                  {accountMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setAccountMenuOpen(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl z-20 border border-gray-700">
+                        <div className="p-2">
+                          <div className="px-4 py-3 border-b border-gray-700">
+                            <p className="text-white font-semibold text-sm">{user.name || 'User'}</p>
+                            <p className="text-gray-400 text-xs truncate">{user.email}</p>
+                          </div>
+                          <Link
+                            href="#"
+                            className="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                            onClick={() => setAccountMenuOpen(false)}
+                          >
+                            Your channel
+                          </Link>
+                          <Link
+                            href="#"
+                            className="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                            onClick={() => setAccountMenuOpen(false)}
+                          >
+                            Settings
+                          </Link>
+                          <div className="border-t border-gray-700 my-2" />
+                          <button
+                            onClick={() => {
+                              logout()
+                              setAccountMenuOpen(false)
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                          >
+                            Sign out
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </header>

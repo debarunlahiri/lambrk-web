@@ -4,13 +4,8 @@ import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-
-interface User {
-  isLoggedIn: boolean
-  name?: string
-  email?: string
-  profileImage?: string
-}
+import { useAuth } from '../contexts/AuthContext'
+import CustomVideoPlayer from '../components/CustomVideoPlayer'
 
 interface Video {
   id: number
@@ -49,18 +44,19 @@ function WatchContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const videoId = searchParams.get('v')
+  const { user, logout } = useAuth()
   
   const [isLoaded, setIsLoaded] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [user, setUser] = useState<User>({ isLoggedIn: false })
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [likes, setLikes] = useState(12400)
   const [dislikes, setDislikes] = useState(320)
   const [userLike, setUserLike] = useState<'liked' | 'disliked' | null>(null)
+  const [isSubscribed, setIsSubscribed] = useState(false)
   const [shareMenuOpen, setShareMenuOpen] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
   const [timestampCopied, setTimestampCopied] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
   const [currentTime, setCurrentTime] = useState(0)
   const [playlistMenuOpen, setPlaylistMenuOpen] = useState(false)
   const [playlists, setPlaylists] = useState<Playlist[]>([
@@ -347,26 +343,23 @@ function WatchContent() {
   const currentVideo = videos.find(v => v.id === Number(videoId)) || videos[0]
   const relatedVideos = videos.filter(v => v.id !== currentVideo.id).slice(0, 4)
 
+  const videoQualities = [
+    { label: '4K', value: '4k', src: currentVideo.thumbnail },
+    { label: '2K', value: '2k', src: currentVideo.thumbnail },
+    { label: '1080p', value: '1080p', src: currentVideo.thumbnail },
+    { label: '720p', value: '720p', src: currentVideo.thumbnail },
+    { label: '480p', value: '480p', src: currentVideo.thumbnail },
+    { label: '360p', value: '360p', src: currentVideo.thumbnail },
+    { label: 'Auto', value: 'auto', src: currentVideo.thumbnail },
+  ]
+
   useEffect(() => {
-    const video = videoRef.current
-    if (!video) return
-
-    const handleTimeUpdate = () => {
-      setCurrentTime(video.currentTime)
-    }
-
-    video.addEventListener('timeupdate', handleTimeUpdate)
-
     const timestamp = searchParams.get('t')
     if (timestamp) {
       const time = parseInt(timestamp, 10)
       if (!isNaN(time) && time > 0) {
-        video.currentTime = time
+        setCurrentTime(time)
       }
-    }
-
-    return () => {
-      video.removeEventListener('timeupdate', handleTimeUpdate)
     }
   }, [searchParams, currentVideo.id])
 
@@ -463,14 +456,16 @@ function WatchContent() {
   }
 
   const sidebarItems = [
-    { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', active: false },
-    { name: 'Trending', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6' },
-    { name: 'Subscriptions', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z' },
-    { name: 'Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10' },
-    { name: 'History', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { name: 'Your videos', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z' },
-    { name: 'Watch later', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
-    { name: 'Liked videos', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+    { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', active: false, requiresAuth: false },
+    { name: 'Trending', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6', requiresAuth: false },
+    ...(user.isLoggedIn ? [
+      { name: 'Subscriptions', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z', requiresAuth: true },
+      { name: 'Library', icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10', requiresAuth: true },
+      { name: 'History', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', requiresAuth: true },
+      { name: 'Your videos', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', requiresAuth: true },
+      { name: 'Watch later', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', requiresAuth: true },
+      { name: 'Liked videos', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z', requiresAuth: true },
+    ] : []),
   ]
 
   return (
@@ -516,29 +511,82 @@ function WatchContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
             </button>
-            <button className="p-1 sm:p-2 hover:bg-gray-800 rounded-full transition-colors">
+            <div className="relative">
               {!user.isLoggedIn ? (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-gray-600 flex items-center justify-center p-1 sm:p-1.5">
-                  <svg className="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </div>
-              ) : user.profileImage ? (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden bg-gray-700 border border-gray-600">
-                  <Image
-                    src={user.profileImage}
-                    alt={user.name || 'Profile'}
-                    width={28}
-                    height={28}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <Link href="/login">
+                  <button className="p-1 sm:p-2 hover:bg-gray-800 rounded-full transition-colors">
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border border-gray-600 flex items-center justify-center p-1 sm:p-1.5">
+                      <svg className="w-full h-full text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                      </svg>
+                    </div>
+                  </button>
+                </Link>
               ) : (
-                <div className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xs sm:text-sm border border-blue-400">
-                  {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
-                </div>
+                <>
+                  <button
+                    onClick={() => setAccountMenuOpen(!accountMenuOpen)}
+                    className="p-1 sm:p-2 hover:bg-gray-800 rounded-full transition-colors"
+                  >
+                    {user.profileImage ? (
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full overflow-hidden bg-gray-700 border border-gray-600">
+                        <Image
+                          src={user.profileImage}
+                          alt={user.name || 'Profile'}
+                          width={28}
+                          height={28}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 sm:w-7 sm:h-7 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-xs sm:text-sm border border-blue-400">
+                        {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                    )}
+                  </button>
+                  {accountMenuOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setAccountMenuOpen(false)}
+                      />
+                      <div className="absolute right-0 mt-2 w-56 bg-gray-800 rounded-lg shadow-xl z-20 border border-gray-700">
+                        <div className="p-2">
+                          <div className="px-4 py-3 border-b border-gray-700">
+                            <p className="text-white font-semibold text-sm">{user.name || 'User'}</p>
+                            <p className="text-gray-400 text-xs truncate">{user.email}</p>
+                          </div>
+                          <Link
+                            href="#"
+                            className="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                            onClick={() => setAccountMenuOpen(false)}
+                          >
+                            Your channel
+                          </Link>
+                          <Link
+                            href="#"
+                            className="block px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                            onClick={() => setAccountMenuOpen(false)}
+                          >
+                            Settings
+                          </Link>
+                          <div className="border-t border-gray-700 my-2" />
+                          <button
+                            onClick={() => {
+                              logout()
+                              setAccountMenuOpen(false)
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
+                          >
+                            Sign out
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
               )}
-            </button>
+            </div>
           </div>
         </div>
       </header>
@@ -622,19 +670,12 @@ function WatchContent() {
               {/* Video Player Section */}
               <div className="flex-1">
                 {/* Video Player */}
-                <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
-                  <video
-                    ref={videoRef}
-                    className="w-full h-full"
-                    controls
-                    autoPlay={isPlaying}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                  >
-                    <source src={currentVideo.thumbnail} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
+                <CustomVideoPlayer
+                  src={currentVideo.thumbnail}
+                  qualities={videoQualities}
+                  onTimeUpdate={(time) => setCurrentTime(time)}
+                  initialTime={currentTime}
+                />
 
                 {/* Video Info */}
                 <div className="mb-4">
@@ -653,6 +694,10 @@ function WatchContent() {
                       <div className="flex items-center rounded-full overflow-hidden border border-gray-700">
                         <button
                           onClick={() => {
+                            if (!user.isLoggedIn) {
+                              router.push('/login')
+                              return
+                            }
                             if (userLike === 'liked') {
                               setUserLike(null)
                               setLikes(likes - 1)
@@ -668,7 +713,7 @@ function WatchContent() {
                             userLike === 'liked'
                               ? 'bg-blue-600 hover:bg-blue-700 text-white'
                               : 'bg-gray-800 hover:bg-gray-700 text-white'
-                          }`}
+                          } ${!user.isLoggedIn ? 'opacity-60 cursor-pointer' : ''}`}
                         >
                           <svg className="w-5 h-5" fill={userLike === 'liked' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
@@ -678,6 +723,10 @@ function WatchContent() {
                         <div className="w-px h-6 bg-gray-700"></div>
                         <button
                           onClick={() => {
+                            if (!user.isLoggedIn) {
+                              router.push('/login')
+                              return
+                            }
                             if (userLike === 'disliked') {
                               setUserLike(null)
                               setDislikes(dislikes - 1)
@@ -693,7 +742,7 @@ function WatchContent() {
                             userLike === 'disliked'
                               ? 'bg-red-600 hover:bg-red-700 text-white'
                               : 'bg-gray-800 hover:bg-gray-700 text-white'
-                          }`}
+                          } ${!user.isLoggedIn ? 'opacity-60 cursor-pointer' : ''}`}
                         >
                           <svg className="w-5 h-5 rotate-180" fill={userLike === 'disliked' ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
@@ -809,9 +858,13 @@ function WatchContent() {
                         <button 
                           onClick={(e) => {
                             e.stopPropagation()
+                            if (!user.isLoggedIn) {
+                              router.push('/login')
+                              return
+                            }
                             setPlaylistMenuOpen(!playlistMenuOpen)
                           }}
-                          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors"
+                          className={`flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-full text-white transition-colors ${!user.isLoggedIn ? 'opacity-60' : ''}`}
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
@@ -978,8 +1031,21 @@ function WatchContent() {
                       <h3 className="text-white font-semibold">{currentVideo.channel}</h3>
                       <p className="text-sm text-gray-400">1.5M subscribers</p>
                     </div>
-                    <button className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-full text-white font-semibold text-sm transition-colors">
-                      Subscribe
+                    <button
+                      onClick={() => {
+                        if (!user.isLoggedIn) {
+                          router.push('/login')
+                          return
+                        }
+                        setIsSubscribed(!isSubscribed)
+                      }}
+                      className={`px-4 py-2 rounded-full text-white font-semibold text-sm transition-colors ${
+                        isSubscribed
+                          ? 'bg-gray-700 hover:bg-gray-600'
+                          : 'bg-red-600 hover:bg-red-700'
+                      } ${!user.isLoggedIn ? 'opacity-60 cursor-pointer' : ''}`}
+                    >
+                      {isSubscribed ? 'Subscribed' : 'Subscribe'}
                     </button>
                   </div>
 
@@ -1008,13 +1074,19 @@ function WatchContent() {
                           <textarea
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
-                            placeholder="Add a comment..."
-                            className="w-full bg-transparent border-b border-gray-700 text-white placeholder-gray-500 pb-2 focus:outline-none focus:border-white resize-none"
+                            placeholder={user.isLoggedIn ? "Add a comment..." : "Sign in to comment"}
+                            className="w-full bg-transparent border-b border-gray-700 text-white placeholder-gray-500 pb-2 focus:outline-none focus:border-white resize-none disabled:cursor-not-allowed"
                             rows={1}
+                            disabled={!user.isLoggedIn}
                             onInput={(e) => {
                               const target = e.target as HTMLTextAreaElement
                               target.style.height = 'auto'
                               target.style.height = `${target.scrollHeight}px`
+                            }}
+                            onFocus={() => {
+                              if (!user.isLoggedIn) {
+                                router.push('/login')
+                              }
                             }}
                           />
                           <div className="flex justify-end gap-2 mt-2">
@@ -1026,6 +1098,10 @@ function WatchContent() {
                             </button>
                             <button
                               onClick={() => {
+                                if (!user.isLoggedIn) {
+                                  router.push('/login')
+                                  return
+                                }
                                 if (newComment.trim()) {
                                   const comment: Comment = {
                                     id: comments.length + 1,
@@ -1041,7 +1117,7 @@ function WatchContent() {
                                   setNewComment('')
                                 }
                               }}
-                              disabled={!newComment.trim()}
+                              disabled={!newComment.trim() || !user.isLoggedIn}
                               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed rounded-full text-white font-semibold text-sm transition-colors"
                             >
                               Comment
@@ -1068,35 +1144,39 @@ function WatchContent() {
                             <p className="text-white text-sm mb-2">{comment.text}</p>
                             <div className="flex items-center gap-4">
                               <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => {
-                                    setComments(comments.map(c => {
-                                      if (c.id !== comment.id) return c
-                                      
-                                      if (c.userLiked) {
-                                        return {
-                                          ...c,
-                                          likes: c.likes - 1,
-                                          userLiked: false
-                                        }
-                                      } else {
-                                        const wasDisliked = c.userDisliked
-                                        return {
-                                          ...c,
-                                          likes: c.likes + 1,
-                                          dislikes: wasDisliked ? c.dislikes - 1 : c.dislikes,
-                                          userLiked: true,
-                                          userDisliked: false
-                                        }
+                              <button
+                                onClick={() => {
+                                  if (!user.isLoggedIn) {
+                                    router.push('/login')
+                                    return
+                                  }
+                                  setComments(comments.map(c => {
+                                    if (c.id !== comment.id) return c
+                                    
+                                    if (c.userLiked) {
+                                      return {
+                                        ...c,
+                                        likes: c.likes - 1,
+                                        userLiked: false
                                       }
-                                    }))
-                                  }}
-                                  className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
-                                    comment.userLiked
-                                      ? 'text-blue-500 hover:text-blue-400'
-                                      : 'text-gray-400 hover:text-white'
-                                  }`}
-                                >
+                                    } else {
+                                      const wasDisliked = c.userDisliked
+                                      return {
+                                        ...c,
+                                        likes: c.likes + 1,
+                                        dislikes: wasDisliked ? c.dislikes - 1 : c.dislikes,
+                                        userLiked: true,
+                                        userDisliked: false
+                                      }
+                                    }
+                                  }))
+                                }}
+                                className={`flex items-center gap-1 px-2 py-1 rounded-full transition-colors ${
+                                  comment.userLiked
+                                    ? 'text-blue-500 hover:text-blue-400'
+                                    : 'text-gray-400 hover:text-white'
+                                } ${!user.isLoggedIn ? 'opacity-60' : ''}`}
+                              >
                                   <svg 
                                     className="w-5 h-5" 
                                     fill={comment.userLiked ? 'currentColor' : 'none'} 
@@ -1109,6 +1189,10 @@ function WatchContent() {
                                 </button>
                                 <button
                                   onClick={() => {
+                                    if (!user.isLoggedIn) {
+                                      router.push('/login')
+                                      return
+                                    }
                                     setComments(comments.map(c => {
                                       if (c.id !== comment.id) return c
                                       
@@ -1134,7 +1218,7 @@ function WatchContent() {
                                     comment.userDisliked
                                       ? 'text-red-500 hover:text-red-400'
                                       : 'text-gray-400 hover:text-white'
-                                  }`}
+                                  } ${!user.isLoggedIn ? 'opacity-60' : ''}`}
                                 >
                                   <svg 
                                     className="w-5 h-5 rotate-180" 

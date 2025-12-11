@@ -1,123 +1,93 @@
 'use client'
 
-import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { useEffect, useState, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import Image from 'next/image'
-import { useAuth } from './contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 
-export default function Home() {
+interface Bit {
+  id: number
+  title: string
+  channel: string
+  views: string
+  time: string
+  video: string
+  likes: number
+  comments: number
+  channelAvatar: string | null
+}
+
+export default function BitsPage() {
   const pathname = usePathname()
   const router = useRouter()
   const { user, logout } = useAuth()
-  const [isLoaded, setIsLoaded] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0)
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
 
-  const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    if (pathname === '/') {
-      e.preventDefault()
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-    }
-  }
-
-  useEffect(() => {
-    setIsLoaded(true)
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 1024)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
-
-  const videos = [
+  const bits: Bit[] = [
     {
       id: 1,
-      title: 'The Future of Streaming - 8K 60fps Experience',
-      channel: 'Lambrk Official',
-      views: '1.2M views',
-      time: '2 days ago',
-      thumbnail: '/video/7644958-uhd_4096_2160_24fps.mp4',
-      duration: '12:34',
+      title: 'Quick Tech Tip: Keyboard Shortcuts',
+      channel: 'TechTips',
+      views: '2.3M',
+      time: '3 hours ago',
+      video: '/video/1536315-hd_1920_1080_30fps.mp4',
+      likes: 125000,
+      comments: 3200,
       channelAvatar: null,
     },
     {
       id: 2,
-      title: 'Dolby Vision & Atmos - Premium Audio Visual Experience',
-      channel: 'Lambrk Tech',
-      views: '856K views',
-      time: '5 days ago',
-      thumbnail: '/video/1536315-hd_1920_1080_30fps.mp4',
-      duration: '8:45',
+      title: 'Amazing Nature Moment',
+      channel: 'NatureLovers',
+      views: '5.1M',
+      time: '1 day ago',
+      video: '/video/7644958-uhd_4096_2160_24fps.mp4',
+      likes: 890000,
+      comments: 12000,
       channelAvatar: null,
     },
     {
       id: 3,
-      title: 'AI-Powered Recommendations Explained',
-      channel: 'Lambrk AI',
-      views: '432K views',
-      time: '1 week ago',
-      thumbnail: '/video/7644958-uhd_4096_2160_24fps.mp4',
-      duration: '15:22',
+      title: 'Cooking Hack You Need to Know',
+      channel: 'ChefDaily',
+      views: '1.8M',
+      time: '2 days ago',
+      video: '/video/1536315-hd_1920_1080_30fps.mp4',
+      likes: 45000,
+      comments: 2100,
       channelAvatar: null,
     },
     {
       id: 4,
-      title: 'Multi-Device Streaming Setup Guide',
-      channel: 'Lambrk Official',
-      views: '234K views',
-      time: '2 weeks ago',
-      thumbnail: '/video/1536315-hd_1920_1080_30fps.mp4',
-      duration: '6:18',
+      title: 'Workout Motivation',
+      channel: 'FitnessPro',
+      views: '3.7M',
+      time: '4 days ago',
+      video: '/video/7644958-uhd_4096_2160_24fps.mp4',
+      likes: 234000,
+      comments: 5600,
       channelAvatar: null,
     },
     {
       id: 5,
-      title: 'RAW Quality Streaming - What You Need to Know',
-      channel: 'Lambrk Tech',
-      views: '189K views',
-      time: '3 weeks ago',
-      thumbnail: '/video/7644958-uhd_4096_2160_24fps.mp4',
-      duration: '10:55',
-      channelAvatar: null,
-    },
-    {
-      id: 6,
-      title: 'HDR Support and Color Accuracy',
-      channel: 'Lambrk Official',
-      views: '156K views',
-      time: '1 month ago',
-      thumbnail: '/video/1536315-hd_1920_1080_30fps.mp4',
-      duration: '9:30',
-      channelAvatar: null,
-    },
-    {
-      id: 7,
-      title: 'Fast Streaming Technology Deep Dive',
-      channel: 'Lambrk Tech',
-      views: '98K views',
-      time: '1 month ago',
-      thumbnail: '/video/7644958-uhd_4096_2160_24fps.mp4',
-      duration: '14:12',
-      channelAvatar: null,
-    },
-    {
-      id: 8,
-      title: 'Getting Started with Lambrk Platform',
-      channel: 'Lambrk Official',
-      views: '67K views',
-      time: '2 months ago',
-      thumbnail: '/video/1536315-hd_1920_1080_30fps.mp4',
-      duration: '7:45',
+      title: 'Funny Pet Moments',
+      channel: 'PetVideos',
+      views: '6.2M',
+      time: '1 week ago',
+      video: '/video/1536315-hd_1920_1080_30fps.mp4',
+      likes: 567000,
+      comments: 8900,
       channelAvatar: null,
     },
   ]
 
   const sidebarItems = [
-    { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', href: '/', active: true, requiresAuth: false },
-    { name: 'Bits', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', href: '/bits', requiresAuth: false },
+    { name: 'Home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', href: '/', requiresAuth: false },
+    { name: 'Bits', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z', href: '/bits', requiresAuth: false, active: true },
     { name: 'Trending', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6', href: '#', requiresAuth: false },
     ...(user.isLoggedIn ? [
       { name: 'Subscriptions', icon: 'M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z', href: '#', requiresAuth: true },
@@ -128,6 +98,76 @@ export default function Home() {
       { name: 'Liked videos', icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z', href: '#', requiresAuth: true },
     ] : []),
   ]
+
+  useEffect(() => {
+    const handleResize = () => {
+      setSidebarOpen(window.innerWidth >= 1024)
+    }
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const container = document.getElementById('bits-container')
+      if (!container) return
+
+      const scrollPosition = container.scrollTop
+      const containerHeight = container.clientHeight
+      const videoHeight = containerHeight
+      const newIndex = Math.round(scrollPosition / videoHeight)
+
+      if (newIndex !== currentVideoIndex && newIndex >= 0 && newIndex < bits.length) {
+        videoRefs.current[currentVideoIndex]?.pause()
+        setCurrentVideoIndex(newIndex)
+        const video = videoRefs.current[newIndex]
+        if (video) {
+          video.currentTime = 0
+          video.play().catch(() => {})
+        }
+      }
+    }
+
+    const container = document.getElementById('bits-container')
+    if (container) {
+      container.addEventListener('scroll', handleScroll)
+      return () => container.removeEventListener('scroll', handleScroll)
+    }
+  }, [currentVideoIndex, bits.length])
+
+  useEffect(() => {
+    const video = videoRefs.current[currentVideoIndex]
+    if (video) {
+      video.currentTime = 0
+      const playPromise = video.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay was prevented, user interaction required
+        })
+      }
+    }
+  }, [currentVideoIndex])
+
+  useEffect(() => {
+    // Play first video on mount
+    const firstVideo = videoRefs.current[0]
+    if (firstVideo) {
+      const playPromise = firstVideo.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay was prevented
+        })
+      }
+    }
+  }, [])
+
+  const handleHomeClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    if (pathname === '/') {
+      e.preventDefault()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
 
   return (
     <main className="min-h-screen bg-dark-bg">
@@ -264,7 +304,7 @@ export default function Home() {
             {sidebarItems.map((item, index) => (
               <Link
                 key={index}
-                href={item.href || (item.name === 'Home' ? '/' : '#')}
+                href={item.href}
                 onClick={item.name === 'Home' ? handleHomeClick : undefined}
                 className={`flex items-center gap-4 px-4 py-3 rounded-lg mb-1 transition-colors ${
                   item.active || pathname === item.href
@@ -328,71 +368,85 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* Main Content */}
+        {/* Main Content - Bits Feed */}
         <div className={`flex-1 transition-all duration-300 ${sidebarOpen ? 'lg:ml-0' : 'lg:ml-0'}`}>
-          <div className="p-4 lg:p-6">
-            {/* Video Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {videos.map((video) => (
-          <Link
-                  key={video.id}
-                  href={`/watch?v=${video.id}`}
-                >
-          <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="cursor-pointer"
-                >
-                  <div className="relative group">
-                    {/* Thumbnail */}
-                    <div className="relative w-full aspect-video bg-gray-800 rounded-lg overflow-hidden mb-2">
-              <video
-                        className="w-full h-full object-cover"
-                        muted
-                loop
-                playsInline
-                        onMouseEnter={(e) => {
-                          const target = e.target as HTMLVideoElement
-                          target.play()
-                        }}
-                        onMouseLeave={(e) => {
-                          const target = e.target as HTMLVideoElement
-                          target.pause()
-                          target.currentTime = 0
-                        }}
-                      >
-                        <source src={video.thumbnail} type="video/mp4" />
-                      </video>
-                      {/* Duration Badge */}
-                      <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-1.5 py-0.5 rounded">
-                        {video.duration}
+          <div
+            id="bits-container"
+            className="h-[calc(100vh-3.5rem)] overflow-y-scroll snap-y snap-mandatory scroll-smooth"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            {bits.map((bit, index) => (
+              <div
+                key={bit.id}
+                className="h-[calc(100vh-3.5rem)] snap-start flex items-center justify-center relative"
+              >
+                <div className="w-full max-w-md h-full flex flex-col relative">
+                  {/* Video */}
+                  <div className="relative flex-1 bg-black rounded-lg overflow-hidden">
+                    <video
+                      ref={(el) => {
+                        videoRefs.current[index] = el
+                      }}
+                      className="w-full h-full object-cover"
+                      loop
+                      muted
+                      playsInline
+                      src={bit.video}
+                    />
+                    
+                    {/* Video Info Overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                          {bit.channel.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-white font-semibold text-sm truncate">{bit.title}</h3>
+                          <p className="text-gray-300 text-xs">{bit.channel}</p>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Video Info */}
-                    <div className="flex gap-3">
-                      {/* Channel Avatar */}
-                      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center text-white font-semibold">
-                        {video.channel.charAt(0)}
-                      </div>
+                    {/* Right Side Actions */}
+                    <div className="absolute right-4 bottom-20 flex flex-col items-center gap-4">
+                      <button className="flex flex-col items-center gap-1">
+                        <div className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                          </svg>
+                        </div>
+                        <span className="text-white text-xs font-medium">{bit.likes > 1000 ? `${(bit.likes / 1000).toFixed(1)}K` : bit.likes}</span>
+                      </button>
 
-                      {/* Title and Metadata */}
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-medium text-white line-clamp-2 mb-1 group-hover:text-blue-400 transition-colors">
-                          {video.title}
-                        </h3>
-                        <p className="text-xs text-gray-400">{video.channel}</p>
-                        <p className="text-xs text-gray-400">
-                          {video.views} • {video.time}
-                        </p>
-                      </div>
+                      <button className="flex flex-col items-center gap-1">
+                        <div className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                        </div>
+                        <span className="text-white text-xs font-medium">{bit.comments > 1000 ? `${(bit.comments / 1000).toFixed(1)}K` : bit.comments}</span>
+                      </button>
+
+                      <button className="flex flex-col items-center gap-1">
+                        <div className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342c8.288 0 12.316-6.864 12.316-12.316 0-.19 0-.38-.007-.57A8.875 8.875 0 0020 3.292c-.783.348-1.624.583-2.506.69a4.314 4.314 0 001.89-2.38 8.645 8.645 0 01-2.74 1.045 4.303 4.303 0 00-7.331 3.92 12.21 12.21 0 01-8.86-4.49 4.302 4.302 0 001.332 5.746 4.273 4.273 0 01-1.946-.538v.054a4.31 4.31 0 003.45 4.22 4.3 4.3 0 01-1.943.074 4.31 4.31 0 004.027 2.987 8.636 8.636 0 01-5.35 1.841c-.346 0-.688-.02-1.024-.06a12.188 12.188 0 006.6 1.93c7.918 0 12.24-6.562 12.24-12.24 0-.186-.004-.372-.012-.558A8.75 8.75 0 0020 5.26z" />
+                          </svg>
+                        </div>
+                      </button>
+
+                      <button className="flex flex-col items-center gap-1">
+                        <div className="w-12 h-12 rounded-full bg-gray-800/50 backdrop-blur-sm flex items-center justify-center hover:bg-gray-700/50 transition-colors">
+                          <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                          </svg>
+                        </div>
+                      </button>
                     </div>
                   </div>
-              </motion.div>
-          </Link>
-              ))}
-            </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -425,22 +479,22 @@ export default function Home() {
             },
           ].map((item) => (
             <div key={item.name}>
-                {item.external ? (
-                  <a
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
+              {item.external ? (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="flex flex-col items-center gap-1 px-4 py-2 text-gray-400"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                   </svg>
                   <span className="text-xs">{item.name}</span>
-                  </a>
-                ) : (
-                  <Link
-                    href={item.href}
-                    onClick={item.onClick}
+                </a>
+              ) : (
+                <Link
+                  href={item.href}
+                  onClick={item.onClick}
                   className={`flex flex-col items-center gap-1 px-4 py-2 ${
                     pathname === item.href ? 'text-blue-400' : 'text-gray-400'
                   }`}
@@ -449,12 +503,13 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
                   </svg>
                   <span className="text-xs">{item.name}</span>
-                  </Link>
-                )}
+                </Link>
+              )}
             </div>
-            ))}
-          </div>
+          ))}
+        </div>
       </div>
     </main>
   )
 }
+

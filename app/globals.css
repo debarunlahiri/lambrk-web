@@ -24,3 +24,13 @@ html {
   }
 }
 
+/* Hide scrollbar for bits container */
+#bits-container::-webkit-scrollbar {
+  display: none;
+}
+
+#bits-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+

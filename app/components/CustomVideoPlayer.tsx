@@ -28,6 +28,8 @@ export default function CustomVideoPlayer({
   const volumeSliderTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const volumeInteractionRef = useRef(false)
   const previousSrcRef = useRef<string>('')
+  const onTimeUpdateRef = useRef(onTimeUpdate)
+  const initialTimeSetRef = useRef(false)
   
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -42,6 +44,11 @@ export default function CustomVideoPlayer({
   const [isDragging, setIsDragging] = useState(false)
   const [isVolumeDragging, setIsVolumeDragging] = useState(false)
   const [controlsTimeout, setControlsTimeout] = useState<NodeJS.Timeout | null>(null)
+
+  // Update onTimeUpdate ref when it changes
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate
+  }, [onTimeUpdate])
 
   // Update selectedQuality when qualities change
   useEffect(() => {
@@ -58,31 +65,35 @@ export default function CustomVideoPlayer({
     const currentSrc = selectedQuality?.src || src
     if (currentSrc && currentSrc !== previousSrcRef.current) {
       previousSrcRef.current = currentSrc
+      initialTimeSetRef.current = false
       // Small delay to ensure React has updated the src attribute
       const timer = setTimeout(() => {
-        if (video && video.src) {
+        if (video) {
+          const wasPlaying = !video.paused
           video.load()
+          if (wasPlaying) {
+            video.play().catch(console.error)
+          }
         }
       }, 50)
       return () => clearTimeout(timer)
     }
   }, [src, selectedQuality])
 
+  // Set up event listeners only once
   useEffect(() => {
     const video = videoRef.current
     if (!video) return
 
     const handleLoadedMetadata = () => {
       setDuration(video.duration)
-      if (initialTime > 0) {
-        video.currentTime = initialTime
-      }
     }
 
     const handleTimeUpdate = () => {
       if (!isDragging) {
-        setCurrentTime(video.currentTime)
-        onTimeUpdate?.(video.currentTime)
+        const time = video.currentTime
+        setCurrentTime(time)
+        onTimeUpdateRef.current?.(time)
       }
     }
 
@@ -96,11 +107,9 @@ export default function CustomVideoPlayer({
     video.addEventListener('pause', handlePause)
     video.addEventListener('ended', handleEnded)
 
-    // Load video metadata
+    // Set initial time if video is already loaded
     if (video.readyState >= 1) {
       handleLoadedMetadata()
-    } else {
-      video.load()
     }
 
     return () => {
@@ -110,7 +119,35 @@ export default function CustomVideoPlayer({
       video.removeEventListener('pause', handlePause)
       video.removeEventListener('ended', handleEnded)
     }
-  }, [initialTime, onTimeUpdate, isDragging, selectedQuality, src])
+  }, [isDragging])
+
+  // Handle initialTime changes separately to avoid reloading
+  useEffect(() => {
+    const video = videoRef.current
+    if (!video || !initialTime) return
+
+    // Reset the flag when initialTime changes
+    if (initialTimeSetRef.current && video.currentTime !== initialTime) {
+      initialTimeSetRef.current = false
+    }
+
+    if (!initialTimeSetRef.current) {
+      if (video.readyState >= 1) {
+        video.currentTime = initialTime
+        initialTimeSetRef.current = true
+      } else {
+        const handleCanPlay = () => {
+          if (!initialTimeSetRef.current) {
+            video.currentTime = initialTime
+            initialTimeSetRef.current = true
+          }
+          video.removeEventListener('canplay', handleCanPlay)
+        }
+        video.addEventListener('canplay', handleCanPlay)
+        return () => video.removeEventListener('canplay', handleCanPlay)
+      }
+    }
+  }, [initialTime])
 
   useEffect(() => {
     const video = videoRef.current

@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { VIDEO_FILES } from '../constants/content'
 
 export default function DownloadsPage() {
   const [isLoaded, setIsLoaded] = useState(false)
@@ -91,7 +92,7 @@ export default function DownloadsPage() {
             transform: 'translate(-50%, -50%)',
           }}
         >
-          <source src="/video/1536315-hd_1920_1080_30fps.mp4" type="video/mp4" />
+          <source src={VIDEO_FILES.HD_4} type="video/mp4" />
         </video>
         <div className="absolute inset-0 bg-dark-bg/70" />
       </div>
@@ -136,15 +137,18 @@ export default function DownloadsPage() {
                   </div>
                   <div className="ml-4 flex gap-2">
                     {item.type === 'file' && item.downloadUrl && (
-                      <motion.a
-                        href={item.downloadUrl}
-                        download
-                        className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors inline-block"
+                      <motion.div
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
                       >
-                        Download
-                      </motion.a>
+                        <a
+                          href={item.downloadUrl}
+                          download
+                          className="px-4 py-2 bg-blue-500 rounded-lg text-white text-sm font-medium hover:bg-blue-600 transition-colors inline-block"
+                        >
+                          Download
+                        </a>
+                      </motion.div>
                     )}
                     {item.type === 'video' && (
                       <>
@@ -156,15 +160,18 @@ export default function DownloadsPage() {
                           Play
                         </motion.button>
                         {item.downloadUrl && (
-                          <motion.a
-                            href={item.downloadUrl}
-                            download
-                            className="px-4 py-2 bg-dark-surface border border-gray-700 rounded-lg text-gray-300 text-sm font-medium hover:border-blue-500/50 hover:text-blue-400 transition-colors inline-block"
+                          <motion.div
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                           >
-                            Download
-                          </motion.a>
+                            <a
+                              href={item.downloadUrl}
+                              download
+                              className="px-4 py-2 bg-dark-surface border border-gray-700 rounded-lg text-gray-300 text-sm font-medium hover:border-blue-500/50 hover:text-blue-400 transition-colors inline-block"
+                            >
+                              Download
+                            </a>
+                          </motion.div>
                         )}
                       </>
                     )}

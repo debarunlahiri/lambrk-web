@@ -13,19 +13,19 @@ The recommendation problem can be formally defined as:
 Given:
 - Content set: C = {c₁, c₂, ..., cₙ} where n is the total number of content items
 - User set: U = {u₁, u₂, ..., uₘ} where m is the total number of users
-- User-content interaction matrix: R ∈ ℝ^(m×n) where Rᵢⱼ represents user i's interaction with content j
-- Feature vectors: F(c) for each content item c ∈ C
+- User-content interaction matrix: R in R^(m x n) where R_ij represents user i's interaction with content j
+- Feature vectors: F(c) for each content item c in C
 
 Find: Top-k content items for user u that maximize the recommendation score S(u, c)
 
 The problem is essentially a **weighted multi-objective optimization problem** where we maximize:
 
-**S(u, c) = w₁·E(c) + w₂·R(c, t) + w₃·Rel(u, c) + w₄·Q(c)**
+**S(u, c) = w_1 * E(c) + w_2 * R(c, t) + w_3 * Rel(u, c) + w_4 * Q(c)**
 
 Subject to constraints:
 - w₁ + w₂ + w₃ + w₄ = 1 (weight normalization)
-- wᵢ ≥ 0 for all i (non-negative weights)
-- c ∉ H(u) (exclude user's history)
+- w_i >= 0 for all i (non-negative weights)
+- c not in H(u) (exclude user's history)
 
 ## Algorithm Components
 
@@ -39,7 +39,7 @@ Each piece of content receives a final score calculated from four weighted compo
 
 In mathematical notation:
 
-**S(c, u, t) = wₑ·E(c) + wᵣ·R(c, t) + wₗ·L(u, c) + wq·Q(c)**
+**S(c, u, t) = w_e * E(c) + w_r * R(c, t) + w_l * L(u, c) + w_q * Q(c)**
 
 Where:
 - S(c, u, t): Final score for content c, user u, at time t
@@ -47,9 +47,9 @@ Where:
 - R(c, t): Recency score function (time-dependent)
 - L(u, c): Relevance/likelihood score function (user-content dependent)
 - Q(c): Quality score function
-- wₑ = 0.40, wᵣ = 0.25, wₗ = 0.20, wq = 0.15 (weights)
+- w_e = 0.40, w_r = 0.25, w_l = 0.20, w_q = 0.15 (weights)
 
-**Constraint**: wₑ + wᵣ + wₗ + wq = 1 (weight normalization)
+**Constraint**: w_e + w_r + w_l + w_q = 1 (weight normalization)
 
 This is a **linear combination** of four independent scoring functions, making it a **weighted linear model**.
 
@@ -99,7 +99,7 @@ This is a **linear combination** of four independent scoring functions, making i
 **Engagement Score = (Views / 1,000,000) × 0.40**
 
 Where:
-- Views are converted from string format (e.g., "1.2M views" → 1,200,000)
+- Views are converted from string format (e.g., "1.2M views" -> 1,200,000)
 - Normalized by dividing by 1 million to get a 0-1 scale
 - Multiplied by 0.40 weight
 
@@ -297,9 +297,9 @@ This measures the percentage of viewers who engage with the content.
 ### View Count Parsing
 
 Convert view count strings to numeric values:
-- "1.2M views" → 1,200,000
-- "856K views" → 856,000
-- "432 views" → 432
+- "1.2M views" -> 1,200,000
+- "856K views" -> 856,000
+- "432 views" -> 432
 
 Formula:
 - Extract number and unit (M, K, or none)
@@ -308,10 +308,10 @@ Formula:
 ### Time Parsing
 
 Convert time-ago strings to hours:
-- "2 hours ago" → 2 hours
-- "5 days ago" → 120 hours (5 × 24)
-- "1 week ago" → 168 hours (7 × 24)
-- "2 months ago" → 1440 hours (2 × 30 × 24)
+- "2 hours ago" -> 2 hours
+- "5 days ago" -> 120 hours (5 * 24)
+- "1 week ago" -> 168 hours (7 * 24)
+- "2 months ago" -> 1440 hours (2 * 30 * 24)
 
 ### Recency Decay Function
 
@@ -332,19 +332,19 @@ This ensures content published in the last hour gets maximum recency score, with
 
 The recency function f(h) exhibits the following mathematical properties:
 
-1. **Monotonicity**: f(h₁) ≥ f(h₂) for h₁ < h₂ (non-increasing function)
-2. **Continuity**: Piecewise continuous with discontinuities at h ∈ {1, 24, 168, 720}
-3. **Boundedness**: f(h) ∈ [0.1, 1.0] for all h ≥ 0
+1. **Monotonicity**: f(h_1) >= f(h_2) for h_1 < h_2 (non-increasing function)
+2. **Continuity**: Piecewise continuous with discontinuities at h in {1, 24, 168, 720}
+3. **Boundedness**: f(h) in [0.1, 1.0] for all h >= 0
 4. **Asymptotic Behavior**: lim(h→∞) f(h) = 0.1
 
 The function can be approximated by an exponential decay model:
 
-**f(h) ≈ α·e^(-λh) + β**
+**f(h) ≈ alpha * e^(-lambda * h) + beta**
 
 Where:
-- α ≈ 0.9 (initial amplitude)
-- λ ≈ 0.001 (decay constant)
-- β ≈ 0.1 (asymptotic value)
+- alpha ≈ 0.9 (initial amplitude)
+- lambda ≈ 0.001 (decay constant)
+- beta ≈ 0.1 (asymptotic value)
 
 This follows the **exponential decay law** commonly used in time-series analysis and recommendation systems.
 
@@ -481,7 +481,7 @@ For generating suggestions for one user:
 
 The recommendation system can be modeled as a **bipartite graph**:
 
-**G = (U ∪ C, E)**
+**G = (U union C, E)**
 
 Where:
 - U: Set of user nodes
@@ -499,11 +499,11 @@ Edge weights can represent:
 1. **Collaborative Filtering via Graph**:
    - Find users similar to target user using **Jaccard Similarity** on neighbor sets
    - Recommend content liked by similar users
-   - Similarity: J(u₁, u₂) = |N(u₁) ∩ N(u₂)| / |N(u₁) ∪ N(u₂)|
+   - Similarity: J(u_1, u_2) = |N(u_1) intersect N(u_2)| / |N(u_1) union N(u_2)|
 
 2. **PageRank Variant**:
    - Apply **Personalized PageRank** to rank content
-   - Random walk with restart probability α
+   - Random walk with restart probability alpha
    - Higher probability of visiting content connected to user's preferences
 
 3. **Shortest Path Recommendations**:
@@ -527,8 +527,8 @@ For engagement metrics following normal distribution:
 #### 2. Weighted Average with Confidence Intervals
 
 Calculate weighted average with confidence:
-- Score = Σ(wᵢ × sᵢ) / Σwᵢ
-- Confidence = 1 / (1 + σ²) where σ² is variance of scores
+- Score = Sum(w_i * s_i) / Sum(w_i)
+- Confidence = 1 / (1 + sigma^2) where sigma^2 is variance of scores
 
 #### 3. Bayesian Approach
 
@@ -616,12 +616,12 @@ Current weights:
 
 The weight optimization problem can be formulated as:
 
-**Minimize**: L(w) = Σᵢ (yᵢ - ŷᵢ(w))²
+**Minimize**: L(w) = Sum_i (y_i - y_hat_i(w))^2
 
 **Subject to**:
 - wₑ + wᵣ + wₗ + wq = 1
-- wᵢ ≥ 0 for all i
-- wᵢ ≤ 1 for all i
+- w_i >= 0 for all i
+- w_i <= 1 for all i
 
 Where:
 - yᵢ: Actual user engagement (ground truth)
@@ -640,9 +640,9 @@ Since we have multiple objectives (engagement, recency, relevance, quality), we 
 **Pareto Optimality**: Find weights where no single objective can be improved without degrading another.
 
 **Weighted Sum Method**:
-- Combine objectives: f(w) = Σᵢ λᵢ·fᵢ(w)
-- Where λᵢ are importance weights for each objective
-- Current: λₑ = 0.40, λᵣ = 0.25, λₗ = 0.20, λq = 0.15
+- Combine objectives: f(w) = Sum_i lambda_i * f_i(w)
+- Where lambda_i are importance weights for each objective
+- Current: lambda_e = 0.40, lambda_r = 0.25, lambda_l = 0.20, lambda_q = 0.15
 
 ### Hyperparameter Tuning
 
@@ -665,7 +665,7 @@ Use **Grid Search** or **Random Search** to find optimal weights:
 
 To ensure diverse recommendations, use **Shannon Entropy**:
 
-**H(S) = -Σᵢ pᵢ log₂(pᵢ)**
+**H(S) = -Sum_i p_i * log_2(p_i)**
 
 Where:
 - S: Set of recommended content
@@ -692,22 +692,25 @@ Where:
 
 Represent content and users as vectors in high-dimensional space:
 
-**Content Vector**: c⃗ = [E(c), R(c), Q(c), ...]
-**User Vector**: u⃗ = [preference₁, preference₂, ...]
+**Content Vector**: c = [E(c), R(c), Q(c), ...]
+**User Vector**: u = [preference_1, preference_2, ...]
 
 **Similarity**: Use **Cosine Similarity**:
 
-**cos(θ) = (u⃗ · c⃗) / (||u⃗|| × ||c⃗||)**
+**cos(theta) = (u * c) / (||u|| * ||c||)**
 
 Where:
-- θ: Angle between vectors
+- theta: Angle between vectors
+- u * c: Dot product of user and content vectors
+- ||u||: Magnitude (norm) of user vector
+- ||c||: Magnitude (norm) of content vector
 - Higher cosine similarity = better match
 
 #### Matrix Factorization
 
 Decompose user-content interaction matrix:
 
-**R ≈ U × Cᵀ**
+**R ≈ U * C^T**
 
 Where:
 - R: m × n interaction matrix
@@ -723,7 +726,7 @@ Use **Singular Value Decomposition (SVD)** or **Non-negative Matrix Factorizatio
 
 Calculate expected engagement for content:
 
-**E[Engagement] = Σᵢ P(User Type i) × Engagement(i)**
+**E[Engagement] = Sum_i P(User Type i) * Engagement(i)**
 
 Where P(User Type i) is probability of user belonging to type i.
 
@@ -731,7 +734,7 @@ Where P(User Type i) is probability of user belonging to type i.
 
 Provide confidence bounds for recommendations:
 
-**Score ± z × SE**
+**Score +/- z * SE**
 
 Where:
 - z: Z-score for desired confidence level (1.96 for 95%)
@@ -752,10 +755,10 @@ Use **t-test** or **Mann-Whitney U test** depending on distribution.
 
 Update weights iteratively:
 
-**wᵢ^(t+1) = wᵢ^(t) - α × (∂L/∂wᵢ)**
+**w_i^(t+1) = w_i^(t) - alpha * (dL/dw_i)**
 
 Where:
-- α: Learning rate
+- alpha: Learning rate
 - ∂L/∂wᵢ: Gradient of loss function with respect to weight i
 - t: Iteration number
 
@@ -763,10 +766,10 @@ Where:
 
 Prevent overfitting using **L1 (Lasso)** or **L2 (Ridge)** regularization:
 
-**L_regularized = L + λ × ||w||**
+**L_regularized = L + lambda * ||w||**
 
 Where:
-- λ: Regularization parameter
+- lambda: Regularization parameter
 - ||w||: Norm of weight vector
 
 ## Fast Performance Optimization for Real-Time Suggestions
@@ -846,10 +849,10 @@ Ensure suggested content maintains quality while being fast:
 
 Apply minimum quality thresholds before scoring:
 
-**Quality Gate**: Q(c) ≥ θ_q
+**Quality Gate**: Q(c) >= theta_q
 
 Where:
-- θ_q: Minimum quality threshold (e.g., 0.3)
+- theta_q: Minimum quality threshold (e.g., 0.3)
 - Content below threshold excluded from suggestions
 - Reduces candidate set by 20-30%
 
@@ -857,10 +860,10 @@ Where:
 
 Fast check for trending content:
 
-**Velocity Threshold**: V(c) = ΔViews / ΔTime ≥ θ_v
+**Velocity Threshold**: V(c) = DeltaViews / DeltaTime >= theta_v
 
 Where:
-- θ_v: Minimum velocity threshold
+- theta_v: Minimum velocity threshold
 - Content with high velocity likely to be engaging
 - O(1) check per content item
 
@@ -887,16 +890,16 @@ Track and optimize for user engagement across all three services:
 **Score Adjustment**:
 - Boost content with high average watch time
 - Penalize content with high drop-off rates
-- Use **Expected Watch Time**: E[WT] = Σᵢ P(Watch i) × WTᵢ
+- Use **Expected Watch Time**: E[WT] = Sum_i P(Watch i) * WT_i
 
 #### 2. Click-Through Rate (CTR) Optimization
 
 **CTR Score Component**:
 - Track historical CTR for each content item
 - Boost content with CTR > platform average
-- Use **Bayesian CTR**: (Clicks + α) / (Impressions + β)
+- Use **Bayesian CTR**: (Clicks + alpha) / (Impressions + beta)
 
-Where α and β are prior parameters (e.g., α=1, β=10)
+Where alpha and beta are prior parameters (e.g., alpha=1, beta=10)
 
 #### 3. Multi-Service Engagement
 
@@ -932,11 +935,11 @@ Maintain engagement throughout session:
 - Content from same creator: +0.05
 - Content in same category: +0.02
 
-**Decay Function**: Boost(t) = Base_Boost × e^(-λt)
+**Decay Function**: Boost(t) = Base_Boost * e^(-lambda * t)
 
 Where:
 - t: Time since last interaction
-- λ: Decay constant (e.g., 0.1 per minute)
+- lambda: Decay constant (e.g., 0.1 per minute)
 
 #### 3. Re-engagement for Returning Users
 
@@ -1001,7 +1004,7 @@ Track and learn from user interactions:
 
 **Score Update Formula**:
 
-**S_updated(c, u) = S_original(c, u) + Σᵢ wᵢ × Iᵢ**
+**S_updated(c, u) = S_original(c, u) + Sum_i w_i * I_i**
 
 Where:
 - Iᵢ: Interaction signal i (1 for positive, -1 for negative)
@@ -1014,10 +1017,10 @@ Update scores in real-time based on user interactions:
 
 **Exponential Moving Average Update**:
 
-**S_new = α × S_old + (1 - α) × S_observed**
+**S_new = alpha * S_old + (1 - alpha) * S_observed**
 
 Where:
-- α: Smoothing factor (e.g., 0.9)
+- alpha: Smoothing factor (e.g., 0.9)
 - S_observed: Score based on immediate interaction
 - Updates happen within seconds of user action
 
@@ -1029,7 +1032,7 @@ Learn from similar users' interactions:
 
 **Collaborative Score Component**:
 
-**S_collab(c, u) = Σᵢ w(u, uᵢ) × Engagement(uᵢ, c) / Σᵢ w(u, uᵢ)**
+**S_collab(c, u) = Sum_i w(u, u_i) * Engagement(u_i, c) / Sum_i w(u, u_i)**
 
 Where:
 - uᵢ: Similar users
@@ -1059,7 +1062,7 @@ Balance showing known good content vs discovering new content:
 
 **Upper Confidence Bound (UCB) Score**:
 
-**S_UCB(c) = S_mean(c) + C × √(ln(N) / n(c))**
+**S_UCB(c) = S_mean(c) + C * sqrt(ln(N) / n(c))**
 
 Where:
 - S_mean(c): Mean score for content c
@@ -1078,7 +1081,7 @@ Treat new content discovery as multi-armed bandit problem:
 
 **Reward Function**: R(c) = Engagement_Rate(c) - Cost(c)
 
-**Optimization Goal**: Maximize Σᵢ R(cᵢ) over time
+**Optimization Goal**: Maximize Sum_i R(c_i) over time
 
 **Algorithm**:
 - Start with equal probability for all new content
@@ -1101,7 +1104,7 @@ Continuously test new recommendation strategies:
 **Statistical Significance**: 
 - Use **Chi-square test** for engagement rates
 - Use **t-test** for session duration
-- Minimum sample size: n = (Z² × p × (1-p)) / E²
+- Minimum sample size: n = (Z^2 * p * (1-p)) / E^2
 
 Where:
 - Z: Z-score for confidence level (1.96 for 95%)
@@ -1131,11 +1134,11 @@ Learn optimal transitions between Videos, Posts, and Bitz:
 
 Normalize scores across different content types:
 
-**Normalized Score**: S_norm(c, type) = (S(c) - μ_type) / σ_type
+**Normalized Score**: S_norm(c, type) = (S(c) - mu_type) / sigma_type
 
 Where:
-- μ_type: Mean score for content type
-- σ_type: Standard deviation for content type
+- mu_type: Mean score for content type
+- sigma_type: Standard deviation for content type
 
 This ensures fair comparison across Videos, Posts, and Bitz.
 

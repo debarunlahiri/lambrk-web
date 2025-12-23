@@ -54,8 +54,17 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 
-# Large media files (uncomment if you don't want to track video files)
-# /public/video/*.mp4
-# /public/video/*.mov
-# /public/video/*.avi
+# Media files - images and videos
+/public/image/*.jpg
+/public/image/*.jpeg
+/public/image/*.png
+/public/image/*.gif
+/public/image/*.webp
+/public/image/*.svg
+/public/video/*.mp4
+/public/video/*.mov
+/public/video/*.avi
+/public/video/*.mkv
+/public/video/*.webm
+/public/video/*.flv
 

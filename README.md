@@ -1,6 +1,6 @@
 # Lambrk - Next-Generation Video Streaming Platform
 
-A modern, dark-themed video streaming platform built with Next.js, featuring a custom YouTube-like video player, authentication system, comments, playlists, and more.
+A modern, dark-themed video streaming platform built with Next.js, featuring multiple content types (Videos, Bitz, Posts), a custom YouTube-like video player, authentication system, comments, playlists, and more.
 
 **Website**: [lambrk.com](https://lambrk.com)
 
@@ -8,12 +8,16 @@ A modern, dark-themed video streaming platform built with Next.js, featuring a c
 
 ### Core Features
 - **Dark Theme Design**: Beautiful black/dark mode interface with subtle gradients and animations
+- **Multi-Content Platform**: Support for Videos, Bitz (short vertical videos), and Posts
 - **Custom Video Player**: YouTube-like custom video player with quality selector (4K, 2K, HD, 720p, 480p, 360p, Auto)
 - **Video Watch Page**: Full-featured video detail page with descriptions, comments, and interactions
+- **Bitz Feed**: Vertical video feed with snap scrolling, keyboard navigation (arrow keys), and interactive controls
+- **Posts Feed**: Social media-style posts with images, likes, dislikes, comments, and shares
+- **Trending Page**: Dedicated page showcasing trending videos, bits, and posts
 - **Authentication System**: User login and signup with email/password and Google OAuth support
 - **Comments System**: Interactive comments with like/dislike functionality and counters
 - **Playlist Management**: Save videos to playlists, create new playlists (public/private), and manage "Watch Later"
-- **Share Functionality**: Share videos via native share API, social media, email, or copy link with timestamp
+- **Share Functionality**: Share content via native share API, social media, email, or copy link with timestamp
 - **Subscribe System**: Subscribe/unsubscribe to channels with authentication
 - **Responsive Design**: Fully responsive and optimized for mobile devices
 - **Fluid Animations**: Smooth animations powered by Framer Motion
@@ -26,7 +30,17 @@ A modern, dark-themed video streaming platform built with Next.js, featuring a c
 - **TypeScript**: Type-safe development
 - **Tailwind CSS**: Utility-first CSS framework
 - **Framer Motion**: Animation library for smooth transitions
-- **React**: UI library
+- **React 18**: UI library
+- **Vercel Analytics**: Analytics integration
+
+### Key Dependencies
+- `next`: ^14.0.0
+- `react`: ^18.2.0
+- `react-dom`: ^18.2.0
+- `framer-motion`: ^10.16.4
+- `@vercel/analytics`: ^1.1.1
+- `typescript`: ^5.0.0
+- `tailwindcss`: ^3.3.0
 
 ## Getting Started
 
@@ -60,27 +74,46 @@ npm run dev
 ```
 lambrk-web/
 ├── app/
+│   ├── bits/
+│   │   └── page.tsx               # Bitz page (vertical video feed)
 │   ├── components/
-│   │   └── CustomVideoPlayer.tsx  # Custom video player component
+│   │   ├── BottomNavigation.tsx   # Bottom navigation component
+│   │   ├── CustomVideoPlayer.tsx  # Custom video player component
+│   │   ├── Header.tsx             # Header component with search and menu
+│   │   └── Sidebar.tsx            # Sidebar navigation component
+│   ├── constants/
+│   │   └── content.ts             # Content data (videos, bits, posts)
 │   ├── contexts/
 │   │   └── AuthContext.tsx        # Authentication context provider
 │   ├── downloads/
 │   │   └── page.tsx               # Downloads page
 │   ├── login/
 │   │   └── page.tsx               # Login page
+│   ├── posts/
+│   │   ├── [id]/                  # Dynamic post route
+│   │   ├── detail/
+│   │   │   └── page.tsx           # Post detail page
+│   │   └── page.tsx               # Posts feed page
 │   ├── signup/
 │   │   └── page.tsx               # Signup page
+│   ├── trending/
+│   │   └── page.tsx               # Trending content page
 │   ├── watch/
 │   │   └── page.tsx               # Video watch/detail page
-│   ├── globals.css                 # Global styles
+│   ├── globals.css                # Global styles
 │   ├── layout.tsx                 # Root layout with AuthProvider
 │   └── page.tsx                   # Home page
 ├── public/
+│   ├── image/                     # Image assets
 │   └── video/                     # Video assets
 ├── .gitignore
+├── LICENSE
 ├── next.config.js
+├── next-env.d.ts
 ├── package.json
+├── package-lock.json
 ├── postcss.config.js
+├── README.md
 ├── tailwind.config.js
 └── tsconfig.json
 ```
@@ -95,13 +128,45 @@ lambrk-web/
 ## Features Breakdown
 
 ### Home Page
-- Animated background video
-- Feature badges with icons
-- Main video showcase with play/pause controls
-- Smooth scroll animations
-- Parallax mouse movement effects
+- Unified feed displaying Videos, Bitz, and Posts
+- Shuffled content on each page load for variety
+- Video thumbnails with hover-to-play preview
+- Responsive grid layout (1-4 columns based on screen size)
+- Channel avatars and metadata (views, time)
+- "View All" links for Bitz and Posts sections
+- Smooth animations with Framer Motion
 - Conditional sidebar menus based on authentication status
 - Account dropdown with user info and logout
+
+### Bitz Page
+- Vertical video feed
+- Snap scrolling (one video per viewport)
+- Keyboard navigation (Arrow Up/Down to navigate)
+- Auto-play current video in viewport
+- Pause previous video when scrolling
+- Like/dislike buttons with counters
+- Comments and share functionality
+- Save to favorites
+- Responsive design with different sizes for various screen resolutions
+- Full-screen vertical video experience
+
+### Posts Page
+- Social media-style feed layout
+- Post cards with author information
+- Image support for posts
+- Like/dislike functionality with state management
+- Comments counter and link to detail page
+- Share functionality (native share API or clipboard fallback)
+- Save/bookmark button
+- Responsive centered layout (max-width for readability)
+- Smooth scroll animations
+
+### Trending Page
+- Dedicated page for trending content
+- Separate sections for Trending Videos, Trending Bitz, and Trending Posts
+- Trending badges on content items
+- Same interaction features as main pages
+- Links to full content pages
 
 ### Watch Page
 - **Custom Video Player**: 
@@ -147,16 +212,44 @@ lambrk-web/
 - Download button for videos
 - Responsive card layout
 
-### Navigation
+### Navigation Components
+
+#### Header
+- Search functionality
+- Sidebar toggle button
+- User account dropdown (when authenticated)
+- Responsive design
+
+#### Sidebar
+- Navigation links (Home, Trending, etc.)
+- Conditional menus based on authentication:
+  - Liked Videos
+  - Watch Later
+  - Your Videos
+  - History
+  - Subscriptions
+- Collapsible on mobile/tablet
+
+#### Bottom Navigation
 - **Home**: Scrolls to top on home page, navigates from other pages
 - **Aria**: Links to aria.lambrk.com (Gen AI website)
 - **Downloads**: Navigates to downloads page
+- Fixed at bottom for easy mobile access
 
-## Video Assets
+## Content Management
 
-Place video files in the `public/video/` directory:
-- Background video: `1536315-hd_1920_1080_30fps.mp4`
-- Main showcase video: `7644958-uhd_4096_2160_24fps.mp4`
+### Video Assets
+Place video files in the `public/video/` directory. Videos are referenced in `app/constants/content.ts`.
+
+### Image Assets
+Place image files in the `public/image/` directory. Images are used for post thumbnails and backgrounds.
+
+### Content Configuration
+Content data (videos, bits, posts) is managed in `app/constants/content.ts`. This includes:
+- Video metadata (title, channel, views, duration, etc.)
+- Bitz metadata (title, channel, views, likes, comments, etc.)
+- Posts metadata (title, author, content, image, likes, dislikes, comments, shares, etc.)
+- Trending content arrays
 
 ## Customization
 
@@ -172,8 +265,17 @@ Update feature lists, descriptions, and download items in their respective page 
 ### Video Player
 Customize video player controls, quality options, and behavior in `app/components/CustomVideoPlayer.tsx`.
 
+### Bitz Feed
+Modify the vertical video feed behavior, keyboard navigation, and interactions in `app/bits/page.tsx`.
+
+### Posts Feed
+Customize post layout, interactions, and styling in `app/posts/page.tsx` and `app/posts/detail/page.tsx`.
+
 ### Authentication
 Modify authentication logic and user management in `app/contexts/AuthContext.tsx`.
+
+### Content Data
+Update content arrays, add new videos/bits/posts, or modify metadata in `app/constants/content.ts`.
 
 ## Browser Support
 

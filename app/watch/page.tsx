@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useAuth } from '../contexts/AuthContext'
+import { useSidebar } from '../contexts/SidebarContext'
 import CustomVideoPlayer from '../components/CustomVideoPlayer'
 import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
@@ -37,9 +38,9 @@ function WatchContent() {
   const searchParams = useSearchParams()
   const videoId = searchParams.get('v')
   const { user, logout } = useAuth()
+  const { sidebarOpen, setSidebarOpen } = useSidebar()
   
   const [isLoaded, setIsLoaded] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
   const [likes, setLikes] = useState(12400)
   const [dislikes, setDislikes] = useState(320)
@@ -96,12 +97,6 @@ function WatchContent() {
 
   useEffect(() => {
     setIsLoaded(true)
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 1024)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
   }, [])
 
 

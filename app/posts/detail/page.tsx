@@ -7,6 +7,7 @@ import Header from '../../components/Header'
 import Sidebar from '../../components/Sidebar'
 import BottomNavigation from '../../components/BottomNavigation'
 import { useAuth } from '../../contexts/AuthContext'
+import { useSidebar } from '../../contexts/SidebarContext'
 import { POSTS, type Post } from '../../constants/content'
 
 interface Comment {
@@ -27,8 +28,8 @@ function PostDetailContent() {
   const searchParams = useSearchParams()
   const postId = searchParams.get('post')
   const { user } = useAuth()
+  const { sidebarOpen, setSidebarOpen } = useSidebar()
   
-  const [sidebarOpen, setSidebarOpen] = useState(true)
   const [postInteractions, setPostInteractions] = useState<{ liked: boolean; disliked: boolean }>({ liked: false, disliked: false })
   const [newComment, setNewComment] = useState('')
   const [comments, setComments] = useState<Comment[]>([
@@ -175,15 +176,6 @@ function PostDetailContent() {
       }
     }))
   }
-
-  useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 1024)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [])
 
   return (
     <main className="min-h-screen bg-dark-bg">

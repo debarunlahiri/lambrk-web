@@ -7,22 +7,20 @@ import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import BottomNavigation from '../components/BottomNavigation'
 import { TRENDING_VIDEOS, TRENDING_BITS, TRENDING_POSTS, shuffleArray } from '../constants/content'
+import { useSidebar } from '../contexts/SidebarContext'
 
 export default function TrendingPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { sidebarOpen, setSidebarOpen } = useSidebar()
+  const [trendingVideos, setTrendingVideos] = useState(TRENDING_VIDEOS)
+  const [trendingBits, setTrendingBits] = useState(TRENDING_BITS)
+  const [trendingPosts, setTrendingPosts] = useState(TRENDING_POSTS)
 
   useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 1024)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    // Shuffle on client-side only to prevent hydration mismatch
+    setTrendingVideos(shuffleArray(TRENDING_VIDEOS))
+    setTrendingBits(shuffleArray(TRENDING_BITS))
+    setTrendingPosts(shuffleArray(TRENDING_POSTS))
   }, [])
-
-  const [trendingVideos] = useState(() => shuffleArray(TRENDING_VIDEOS))
-  const [trendingBits] = useState(() => shuffleArray(TRENDING_BITS))
-  const [trendingPosts] = useState(() => shuffleArray(TRENDING_POSTS))
 
   return (
     <main className="min-h-screen bg-dark-bg">
@@ -283,6 +281,8 @@ export default function TrendingPage() {
         </div>
       </div>
 
+      {/* Spacer for bottom navigation on mobile */}
+      <div className="h-16 lg:hidden" />
       <BottomNavigation />
     </main>
   )

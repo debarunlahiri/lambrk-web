@@ -7,12 +7,13 @@ import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import BottomNavigation from '../components/BottomNavigation'
 import { POSTS, type Post, shuffleArray } from '../constants/content'
+import { useSidebar } from '../contexts/SidebarContext'
 
 export default function PostsPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { sidebarOpen, setSidebarOpen } = useSidebar()
   const [postInteractions, setPostInteractions] = useState<Record<number, { liked: boolean; disliked: boolean }>>({})
 
-  const [posts, setPosts] = useState(() => shuffleArray(POSTS))
+  const [posts, setPosts] = useState(POSTS)
 
   const handleLike = (postId: number) => {
     setPosts(prevPosts => prevPosts.map(post => {
@@ -90,12 +91,8 @@ export default function PostsPage() {
   }
 
   useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 1024)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    // Shuffle on client-side only to prevent hydration mismatch
+    setPosts(shuffleArray(POSTS))
   }, [])
 
   return (
@@ -202,9 +199,12 @@ export default function PostsPage() {
                         </button>
 
                         {/* Comments Button */}
-                        <Link 
-                          href={`/posts/detail?post=${post.id}`}
-                          onClick={(e) => e.stopPropagation()}
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            window.location.href = `/posts/detail?post=${post.id}`
+                          }}
                           className="flex items-center gap-2 text-gray-400 hover:text-blue-400 transition-colors"
                         >
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -213,7 +213,7 @@ export default function PostsPage() {
                           <span className="text-sm font-medium">
                             {post.comments > 1000 ? `${(post.comments / 1000).toFixed(1)}K` : post.comments}
                           </span>
-                        </Link>
+                        </button>
 
                         {/* Share Button */}
                         <button 
@@ -248,6 +248,8 @@ export default function PostsPage() {
         </div>
       </div>
 
+      {/* Spacer for bottom navigation on mobile */}
+      <div className="h-16 lg:hidden" />
       <BottomNavigation />
     </main>
   )

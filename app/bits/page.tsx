@@ -5,14 +5,15 @@ import Header from '../components/Header'
 import Sidebar from '../components/Sidebar'
 import BottomNavigation from '../components/BottomNavigation'
 import { BITS, type Bit, shuffleArray } from '../constants/content'
+import { useSidebar } from '../contexts/SidebarContext'
 
 export default function BitsPage() {
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { sidebarOpen, setSidebarOpen } = useSidebar()
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0)
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([])
   const [bitInteractions, setBitInteractions] = useState<Record<number, { liked: boolean; disliked: boolean }>>({})
 
-  const [bits, setBits] = useState(() => shuffleArray(BITS))
+  const [bits, setBits] = useState(BITS)
 
   const handleLike = (bitId: number) => {
     setBits(prevBits => prevBits.map(bit => {
@@ -87,12 +88,8 @@ export default function BitsPage() {
   }
 
   useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 1024)
-    }
-    handleResize()
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    // Shuffle on client-side only to prevent hydration mismatch
+    setBits(shuffleArray(BITS))
   }, [])
 
   useEffect(() => {
@@ -247,7 +244,7 @@ export default function BitsPage() {
                     </div>
 
                     {/* Right Side Actions */}
-                    <div className="absolute right-4 2xl:right-6 4xl:right-8 bottom-20 2xl:bottom-24 4xl:bottom-28 flex flex-col items-center gap-4 2xl:gap-5 4xl:gap-6">
+                    <div className="absolute right-4 2xl:right-6 4xl:right-8 bottom-28 lg:bottom-20 2xl:bottom-24 4xl:bottom-28 flex flex-col items-center gap-3 lg:gap-4 2xl:gap-5 4xl:gap-6">
                       {/* Like Button - Thumbs Up */}
                       <button 
                         onClick={() => handleLike(bit.id)}
@@ -313,6 +310,8 @@ export default function BitsPage() {
         </div>
       </div>
 
+      {/* Spacer for bottom navigation on mobile */}
+      <div className="h-16 lg:hidden" />
       <BottomNavigation />
     </main>
   )

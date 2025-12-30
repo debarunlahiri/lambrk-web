@@ -59,8 +59,8 @@ export default function Sidebar({ sidebarOpen }: SidebarProps) {
 
   return (
     <aside
-      className={`fixed lg:sticky top-14 left-0 h-[calc(100vh-3.5rem)] bg-dark-bg border-r border-gray-800 overflow-y-auto transition-all duration-300 z-40 flex flex-col ${
-        sidebarOpen ? 'w-64' : 'w-0 lg:w-16 overflow-hidden'
+      className={`fixed lg:sticky top-14 left-0 h-[calc(100vh-3.5rem-4rem)] lg:h-[calc(100vh-3.5rem)] bg-dark-bg border-r border-gray-800 transition-all duration-300 z-40 flex flex-col ${
+        sidebarOpen ? 'w-64 overflow-y-auto' : 'w-0 lg:w-16 overflow-hidden'
       }`}
     >
       {/* Main Navigation */}

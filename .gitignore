@@ -3,8 +3,12 @@
 # dependencies
 /node_modules
 /.pnp
-.pnp.js
-.yarn/install-state.gz
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
 
 # testing
 /coverage
@@ -15,26 +19,19 @@
 
 # production
 /build
-/dist
 
 # misc
 .DS_Store
 *.pem
-*.log
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+.pnpm-debug.log*
 
-# local env files
-.env
-.env*.local
-.env.development.local
-.env.test.local
-.env.production.local
+# env files (can opt-in for committing if needed)
+.env*
 
 # vercel
 .vercel
@@ -42,29 +39,3 @@ lerna-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Media files - images and videos
-/public/image/*.jpg
-/public/image/*.jpeg
-/public/image/*.png
-/public/image/*.gif
-/public/image/*.webp
-/public/image/*.svg
-/public/video/*.mp4
-/public/video/*.mov
-/public/video/*.avi
-/public/video/*.mkv
-/public/video/*.webm
-/public/video/*.flv
-

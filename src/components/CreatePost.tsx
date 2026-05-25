@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Image as ImageIcon, Film, X, Sparkles } from "lucide-react";
+import { uploadFile, ApiError } from "@/lib/api";
+import { Image as ImageIcon, Film, X, Sparkles, Loader2 } from "lucide-react";
 
 interface CreatePostProps {
   onPost: (content: string, media: { type: "image" | "video"; url: string }[]) => void;
@@ -12,6 +13,10 @@ export default function CreatePost({ onPost }: CreatePostProps) {
   const { user } = useAuth();
   const [content, setContent] = useState("");
   const [media, setMedia] = useState<{ type: "image" | "video"; url: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingType, setPendingType] = useState<"image" | "video" | null>(null);
 
   const avatarText = user?.displayName
     ? user.displayName
@@ -29,19 +34,42 @@ export default function CreatePost({ onPost }: CreatePostProps) {
     setMedia([]);
   };
 
-  const addMockMedia = (type: "image" | "video") => {
-    if (type === "image") {
-      const images = [
-        "https://images.unsplash.com/photo-1682687220742-aba13b6e50ba?w=800&q=80",
-        "https://images.unsplash.com/photo-1682687982501-1e58ab814714?w=800&q=80",
-        "https://images.unsplash.com/photo-1682687221038-404670f01d03?w=800&q=80",
-        "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800&q=80",
-      ];
-      const randomImage = images[Math.floor(Math.random() * images.length)];
-      setMedia([...media, { type, url: randomImage }]);
-    } else {
-      setMedia([...media, { type, url: "https://www.w3schools.com/html/mov_bbb.mp4" }]);
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !pendingType) return;
+    setUploading(true);
+    setUploadError("");
+    try {
+      const apiType = pendingType === "image" ? "POST_IMAGE" : "POST_VIDEO";
+      const uploaded = await uploadFile({
+        file,
+        type: apiType,
+        fileName: file.name,
+        description: "Post media",
+        isPublic: true,
+        isNSFW: false,
+      });
+      setMedia([...media, { type: pendingType, url: uploaded.fileUrl }]);
+    } catch (err: unknown) {
+      let message = "Upload failed. Please try again.";
+      if (err instanceof ApiError) {
+        message = err.message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
+      setUploadError(message);
+    } finally {
+      setUploading(false);
+      setPendingType(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
+  };
+
+  const triggerUpload = (type: "image" | "video") => {
+    setPendingType(type);
+    fileInputRef.current?.click();
   };
 
   const removeMedia = (index: number) => {
@@ -62,6 +90,12 @@ export default function CreatePost({ onPost }: CreatePostProps) {
             className="w-full resize-none bg-transparent text-lg placeholder:text-muted/60 outline-none"
             rows={2}
           />
+
+          {uploadError && (
+            <div className="rounded-2xl bg-red-500/10 px-3 py-2 text-xs text-red-500">
+              {uploadError}
+            </div>
+          )}
 
           {media.length > 0 && (
             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
@@ -94,20 +128,37 @@ export default function CreatePost({ onPost }: CreatePostProps) {
           )}
 
           <div className="flex items-center justify-between">
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
               <button
-                onClick={() => addMockMedia("image")}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10"
+                onClick={() => triggerUpload("image")}
+                disabled={uploading}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
                 title="Add image"
               >
-                <ImageIcon size={20} />
+                {uploading && pendingType === "image" ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <ImageIcon size={20} />
+                )}
               </button>
               <button
-                onClick={() => addMockMedia("video")}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10"
+                onClick={() => triggerUpload("video")}
+                disabled={uploading}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
                 title="Add video"
               >
-                <Film size={20} />
+                {uploading && pendingType === "video" ? (
+                  <Loader2 size={20} className="animate-spin" />
+                ) : (
+                  <Film size={20} />
+                )}
               </button>
               <button className="flex h-10 w-10 items-center justify-center rounded-full text-accent-2 transition-colors hover:bg-accent-2/10">
                 <Sparkles size={20} />
@@ -115,7 +166,7 @@ export default function CreatePost({ onPost }: CreatePostProps) {
             </div>
             <button
               onClick={handleSubmit}
-              disabled={!content.trim() && media.length === 0}
+              disabled={(!content.trim() && media.length === 0) || uploading}
               className="rounded-full bg-foreground px-6 py-2.5 text-sm font-bold text-background transition-opacity hover:opacity-80 disabled:opacity-30"
             >
               Publish

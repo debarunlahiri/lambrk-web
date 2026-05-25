@@ -14,8 +14,9 @@ import {
   Send,
   Loader2,
 } from "lucide-react";
-import { mockPosts } from "@/lib/data";
-import { listCommentsForPost, createComment, type ApiComment } from "@/lib/api";
+import { listCommentsForPost, createComment, getPost, getContextualRecommendations, votePost, voteComment, type ApiComment } from "@/lib/api";
+import { mapFeedPost, type Post } from "@/lib/data";
+import PostCard from "@/components/PostCard";
 
 interface PostDetailProps {
   params: Promise<{ id: string }>;
@@ -47,6 +48,72 @@ function getAvatarText(displayName: string): string {
 }
 
 function CommentCard({ comment }: { comment: ApiComment }) {
+  const [liked, setLiked] = useState(false);
+  const [disliked, setDisliked] = useState(false);
+  const [likeCount, setLikeCount] = useState(comment.likeCount);
+  const [dislikeCount, setDislikeCount] = useState(comment.dislikeCount);
+  const [voting, setVoting] = useState(false);
+
+  const handleCommentLike = async () => {
+    if (voting) return;
+    setVoting(true);
+    const wasLiked = liked;
+    const wasDisliked = disliked;
+
+    if (wasLiked) {
+      setLiked(false);
+      setLikeCount((prev) => prev - 1);
+    } else {
+      setLiked(true);
+      setLikeCount((prev) => prev + 1);
+      if (wasDisliked) {
+        setDisliked(false);
+        setDislikeCount((prev) => prev - 1);
+      }
+    }
+
+    try {
+      await voteComment(comment.id, "LIKE");
+    } catch {
+      setLiked(wasLiked);
+      setDisliked(wasDisliked);
+      setLikeCount(comment.likeCount);
+      setDislikeCount(comment.dislikeCount);
+    } finally {
+      setVoting(false);
+    }
+  };
+
+  const handleCommentDislike = async () => {
+    if (voting) return;
+    setVoting(true);
+    const wasLiked = liked;
+    const wasDisliked = disliked;
+
+    if (wasDisliked) {
+      setDisliked(false);
+      setDislikeCount((prev) => prev - 1);
+    } else {
+      setDisliked(true);
+      setDislikeCount((prev) => prev + 1);
+      if (wasLiked) {
+        setLiked(false);
+        setLikeCount((prev) => prev - 1);
+      }
+    }
+
+    try {
+      await voteComment(comment.id, "DISLIKE");
+    } catch {
+      setLiked(wasLiked);
+      setDisliked(wasDisliked);
+      setLikeCount(comment.likeCount);
+      setDislikeCount(comment.dislikeCount);
+    } finally {
+      setVoting(false);
+    }
+  };
+
   return (
     <div className="flex gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white">
@@ -70,16 +137,30 @@ function CommentCard({ comment }: { comment: ApiComment }) {
         <p className="text-sm leading-relaxed">{comment.content}</p>
         <div className="mt-1 flex items-center gap-3">
           <div className="flex items-center gap-1">
-            <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground">
-              <ThumbsUp size={14} />
+            <button
+              onClick={handleCommentLike}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                liked
+                  ? "bg-accent/10 text-accent"
+                  : "text-muted hover:bg-surface hover:text-foreground"
+              }`}
+            >
+              <ThumbsUp size={14} fill={liked ? "currentColor" : "none"} />
             </button>
-            <span className="text-xs text-muted">{comment.likeCount}</span>
+            <span className="text-xs text-muted">{likeCount}</span>
           </div>
           <div className="flex items-center gap-1">
-            <button className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground">
-              <ThumbsDown size={14} />
+            <button
+              onClick={handleCommentDislike}
+              className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
+                disliked
+                  ? "bg-red-500/10 text-red-500"
+                  : "text-muted hover:bg-surface hover:text-foreground"
+              }`}
+            >
+              <ThumbsDown size={14} fill={disliked ? "currentColor" : "none"} />
             </button>
-            <span className="text-xs text-muted">{comment.dislikeCount}</span>
+            <span className="text-xs text-muted">{dislikeCount}</span>
           </div>
           {comment.replyCount > 0 && (
             <span className="text-xs text-muted">{comment.replyCount} replies</span>
@@ -93,19 +174,20 @@ function CommentCard({ comment }: { comment: ApiComment }) {
 export default function PostDetail({ params }: PostDetailProps) {
   const { user, isAuthenticated } = useAuth();
   const { id: postId } = use(params);
-  const post = mockPosts.find((p) => p.id === postId);
-
-  const numericPostId = parseInt(postId, 10);
 
   const avatarText = user?.displayName
     ? getAvatarText(user.displayName)
     : "YO";
 
+  const [post, setPost] = useState<Post | null>(null);
+  const [postLoading, setPostLoading] = useState(true);
+  const [postError, setPostError] = useState("");
+
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [likeCount, setLikeCount] = useState(post?.likes ?? 0);
-  const [dislikeCount, setDislikeCount] = useState(post?.dislikes ?? 0);
+  const [likeCount, setLikeCount] = useState(0);
+  const [dislikeCount, setDislikeCount] = useState(0);
 
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<ApiComment[]>([]);
@@ -114,10 +196,41 @@ export default function PostDetail({ params }: PostDetailProps) {
   const [totalComments, setTotalComments] = useState(0);
   const [posting, setPosting] = useState(false);
 
+  const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+
   useEffect(() => {
-    if (isNaN(numericPostId)) return;
+    if (!postId) {
+      setPostError("Invalid post ID");
+      setPostLoading(false);
+      return;
+    }
     let cancelled = false;
-    listCommentsForPost(numericPostId)
+    setPostLoading(true);
+    setPostError("");
+
+    getPost(postId)
+      .then((data) => {
+        if (cancelled) return;
+        const mapped = mapFeedPost(data);
+        setPost(mapped);
+        setLikeCount(mapped.likes);
+        setDislikeCount(mapped.dislikes);
+        setPostLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setPostError(err instanceof Error ? err.message : "Failed to load post");
+        setPostLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [postId]);
+
+  useEffect(() => {
+    if (!postId) return;
+    let cancelled = false;
+    listCommentsForPost(postId)
       .then((data) => {
         if (cancelled) return;
         setComments(data.content);
@@ -130,43 +243,82 @@ export default function PostDetail({ params }: PostDetailProps) {
         setCommentsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [numericPostId]);
+  }, [postId]);
 
-  const handleLike = () => {
-    if (liked) {
+  useEffect(() => {
+    if (!postId || !user) return;
+    setRelatedLoading(true);
+    getContextualRecommendations(user.id, {
+      type: "posts",
+      limit: 5,
+      contextPostId: postId,
+    })
+      .then((data) => setRelatedPosts(data.posts.map(mapFeedPost)))
+      .catch(() => {})
+      .finally(() => setRelatedLoading(false));
+  }, [postId, user]);
+
+  const handleLike = async () => {
+    const wasLiked = liked;
+    const wasDisliked = disliked;
+
+    if (wasLiked) {
       setLiked(false);
       setLikeCount((prev) => prev - 1);
     } else {
       setLiked(true);
       setLikeCount((prev) => prev + 1);
-      if (disliked) {
+      if (wasDisliked) {
         setDisliked(false);
         setDislikeCount((prev) => prev - 1);
       }
     }
+
+    try {
+      await votePost(postId, "LIKE");
+    } catch {
+      setLiked(wasLiked);
+      setDisliked(wasDisliked);
+      const current = post?.likes ?? 0;
+      setLikeCount(current);
+      const currentDislike = post?.dislikes ?? 0;
+      setDislikeCount(currentDislike);
+    }
   };
 
-  const handleDislike = () => {
-    if (disliked) {
+  const handleDislike = async () => {
+    const wasLiked = liked;
+    const wasDisliked = disliked;
+
+    if (wasDisliked) {
       setDisliked(false);
       setDislikeCount((prev) => prev - 1);
     } else {
       setDisliked(true);
       setDislikeCount((prev) => prev + 1);
-      if (liked) {
+      if (wasLiked) {
         setLiked(false);
         setLikeCount((prev) => prev - 1);
       }
     }
+
+    try {
+      await votePost(postId, "DISLIKE");
+    } catch {
+      setLiked(wasLiked);
+      setDisliked(wasDisliked);
+      setLikeCount(post?.likes ?? 0);
+      setDislikeCount(post?.dislikes ?? 0);
+    }
   };
 
   const handleComment = async () => {
-    if (!commentText.trim() || !isAuthenticated || isNaN(numericPostId)) return;
+    if (!commentText.trim() || !isAuthenticated || !postId) return;
     setPosting(true);
     try {
       const newComment = await createComment({
         content: commentText.trim(),
-        postId: numericPostId,
+        postId: postId,
         parentCommentId: null,
       });
       setComments((prev) => [newComment, ...prev]);
@@ -180,11 +332,52 @@ export default function PostDetail({ params }: PostDetailProps) {
     }
   };
 
-  if (!post) {
+  if (postLoading) {
+    return (
+      <div className="flex flex-col gap-6 pb-8">
+        <div className="sticky top-0 z-10 flex items-center gap-3 bg-background/80 px-2 py-3 backdrop-blur-xl">
+          <Link
+            href="/"
+            className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface"
+          >
+            <ArrowLeft size={20} />
+          </Link>
+          <div className="h-5 w-20 animate-pulse rounded-full bg-surface" />
+        </div>
+        <div className="flex flex-col gap-4 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-border animate-pulse">
+          <div className="h-4 w-3/4 rounded-full bg-surface" />
+          <div className="h-4 w-full rounded-full bg-surface" />
+          <div className="h-4 w-1/2 rounded-full bg-surface" />
+          <div className="h-48 rounded-2xl bg-surface" />
+      </div>
+
+      {/* Related Posts */}
+      {relatedLoading && (
+        <div className="flex items-center justify-center py-8 text-muted">
+          <Loader2 size={24} className="animate-spin" />
+        </div>
+      )}
+      {!relatedLoading && relatedPosts.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="text-lg font-bold">Related Posts</h2>
+          <div className="flex flex-col gap-4">
+            {relatedPosts.map((p) => (
+              <PostCard key={p.id} post={p} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+  if (postError || !post) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-muted">
+        <MessageCircle size={48} className="mb-4 opacity-30" />
         <p className="text-xl font-bold">Post not found</p>
-        <Link href="/" className="mt-2 text-accent hover:underline">
+        <p className="mt-1 text-sm">{postError || "This post could not be loaded."}</p>
+        <Link href="/" className="mt-4 text-accent hover:underline">
           Back to feed
         </Link>
       </div>

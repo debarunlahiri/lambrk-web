@@ -13,6 +13,7 @@ import {
   Play,
 } from "lucide-react";
 import type { Post } from "@/lib/data";
+import { votePost } from "@/lib/api";
 
 interface PostCardProps {
   post: Post;
@@ -24,32 +25,73 @@ export default function PostCard({ post }: PostCardProps) {
   const [saved, setSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [dislikeCount, setDislikeCount] = useState(post.dislikes);
+  const [voting, setVoting] = useState(false);
 
-  const handleLike = () => {
-    if (liked) {
+  const handleLike = async () => {
+    if (voting) return;
+    setVoting(true);
+
+    const wasLiked = liked;
+    const wasDisliked = disliked;
+
+    if (wasLiked) {
       setLiked(false);
       setLikeCount((prev) => prev - 1);
     } else {
       setLiked(true);
       setLikeCount((prev) => prev + 1);
-      if (disliked) {
+      if (wasDisliked) {
         setDisliked(false);
         setDislikeCount((prev) => prev - 1);
       }
     }
+
+    try {
+      if (post.id && !post.id.startsWith("pending-")) {
+        await votePost(post.id, "LIKE");
+      }
+    } catch {
+      // Revert on failure
+      setLiked(wasLiked);
+      setDisliked(wasDisliked);
+      setLikeCount(post.likes);
+      setDislikeCount(post.dislikes);
+    } finally {
+      setVoting(false);
+    }
   };
 
-  const handleDislike = () => {
-    if (disliked) {
+  const handleDislike = async () => {
+    if (voting) return;
+    setVoting(true);
+
+    const wasLiked = liked;
+    const wasDisliked = disliked;
+
+    if (wasDisliked) {
       setDisliked(false);
       setDislikeCount((prev) => prev - 1);
     } else {
       setDisliked(true);
       setDislikeCount((prev) => prev + 1);
-      if (liked) {
+      if (wasLiked) {
         setLiked(false);
         setLikeCount((prev) => prev - 1);
       }
+    }
+
+    try {
+      if (post.id && !post.id.startsWith("pending-")) {
+        await votePost(post.id, "DISLIKE");
+      }
+    } catch {
+      // Revert on failure
+      setLiked(wasLiked);
+      setDisliked(wasDisliked);
+      setLikeCount(post.likes);
+      setDislikeCount(post.dislikes);
+    } finally {
+      setVoting(false);
     }
   };
 
@@ -61,8 +103,12 @@ export default function PostCard({ post }: PostCardProps) {
         <div className="flex flex-col gap-3 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white">
-                {post.author.avatar}
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white overflow-hidden">
+                {post.author.avatarUrl ? (
+                  <img src={post.author.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  post.author.avatar
+                )}
               </div>
               <div>
                 <p className="text-sm font-bold">{post.author.name}</p>

@@ -1,9 +1,12 @@
+import type { FeedPost } from "@/lib/api";
+
 export interface Post {
   id: string;
   author: {
     name: string;
     handle: string;
     avatar: string;
+    avatarUrl?: string | null;
   };
   content: string;
   media?: {
@@ -15,6 +18,52 @@ export interface Post {
   comments: number;
   reposts: number;
   timestamp: string;
+}
+
+export type { FeedPost } from "@/lib/api";
+
+function formatTimeAgo(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d`;
+  const months = Math.floor(days / 30);
+  return `${months}mo`;
+}
+
+export function mapFeedPost(post: FeedPost): Post {
+  const initials = post.author.displayName
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "??";
+
+  return {
+    id: post.id,
+    author: {
+      name: post.author.displayName,
+      handle: `@${post.author.username}`,
+      avatar: initials,
+      avatarUrl: post.author.avatarUrl,
+    },
+    content: post.content,
+    media: post.files?.map((f) => ({
+      type: f.mimeType.startsWith("video/") ? "video" : "image",
+      url: f.fileUrl,
+    })) || undefined,
+    likes: post.likeCount,
+    dislikes: post.dislikeCount,
+    comments: post.commentCount,
+    reposts: post.repostCount ?? 0,
+    timestamp: formatTimeAgo(post.createdAt),
+  };
 }
 
 export interface Comment {

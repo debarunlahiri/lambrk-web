@@ -251,6 +251,7 @@ export default function CommunityPage() {
           <img
             src={community.headerImageUrl}
             alt={community.title}
+            loading="lazy"
             className="h-full w-full object-cover"
           />
         </div>
@@ -265,6 +266,7 @@ export default function CommunityPage() {
                 <img
                   src={community.iconImageUrl}
                   alt=""
+                  loading="lazy"
                   className="h-full w-full object-cover"
                 />
               ) : (

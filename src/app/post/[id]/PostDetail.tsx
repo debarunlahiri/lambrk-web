@@ -1,22 +1,38 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import {
-  ArrowLeft,
   ThumbsUp,
   ThumbsDown,
   MessageCircle,
   Repeat,
   Share2,
   Bookmark,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
   Send,
   Loader2,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
-import { listCommentsForPost, createComment, getPost, getContextualRecommendations, votePost, voteComment, type ApiComment } from "@/lib/api";
+import {
+  listCommentsForPost,
+  createComment,
+  getPost,
+  votePost,
+  voteComment,
+  type ApiComment,
+} from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
-import PostCard from "@/components/PostCard";
+import BackButton from "@/components/BackButton";
+import ImagePreviewModal from "@/components/ImagePreviewModal";
+import CommentCard from "@/components/CommentCard";
+import MentionTextarea from "@/components/MentionTextarea";
+import { PostSkeleton, SkeletonPulse } from "@/components/Skeleton";
 
 interface PostDetailProps {
   params: Promise<{ id: string }>;
@@ -47,137 +63,14 @@ function getAvatarText(displayName: string): string {
     .toUpperCase();
 }
 
-function CommentCard({ comment }: { comment: ApiComment }) {
-  const [liked, setLiked] = useState(false);
-  const [disliked, setDisliked] = useState(false);
-  const [likeCount, setLikeCount] = useState(comment.likeCount);
-  const [dislikeCount, setDislikeCount] = useState(comment.dislikeCount);
-  const [voting, setVoting] = useState(false);
 
-  const handleCommentLike = async () => {
-    if (voting) return;
-    setVoting(true);
-    const wasLiked = liked;
-    const wasDisliked = disliked;
-
-    if (wasLiked) {
-      setLiked(false);
-      setLikeCount((prev) => prev - 1);
-    } else {
-      setLiked(true);
-      setLikeCount((prev) => prev + 1);
-      if (wasDisliked) {
-        setDisliked(false);
-        setDislikeCount((prev) => prev - 1);
-      }
-    }
-
-    try {
-      await voteComment(comment.id, "LIKE");
-    } catch {
-      setLiked(wasLiked);
-      setDisliked(wasDisliked);
-      setLikeCount(comment.likeCount);
-      setDislikeCount(comment.dislikeCount);
-    } finally {
-      setVoting(false);
-    }
-  };
-
-  const handleCommentDislike = async () => {
-    if (voting) return;
-    setVoting(true);
-    const wasLiked = liked;
-    const wasDisliked = disliked;
-
-    if (wasDisliked) {
-      setDisliked(false);
-      setDislikeCount((prev) => prev - 1);
-    } else {
-      setDisliked(true);
-      setDislikeCount((prev) => prev + 1);
-      if (wasLiked) {
-        setLiked(false);
-        setLikeCount((prev) => prev - 1);
-      }
-    }
-
-    try {
-      await voteComment(comment.id, "DISLIKE");
-    } catch {
-      setLiked(wasLiked);
-      setDisliked(wasDisliked);
-      setLikeCount(comment.likeCount);
-      setDislikeCount(comment.dislikeCount);
-    } finally {
-      setVoting(false);
-    }
-  };
-
-  return (
-    <div className="flex gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white">
-        {comment.author.avatarUrl ? (
-          <img
-            src={comment.author.avatarUrl}
-            alt=""
-            className="h-full w-full rounded-full object-cover"
-          />
-        ) : (
-          getAvatarText(comment.author.displayName)
-        )}
-      </div>
-      <div className="flex flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold">{comment.author.displayName}</span>
-          <span className="text-xs text-muted">@{comment.author.username}</span>
-          <span className="text-xs text-muted">·</span>
-          <span className="text-xs text-muted">{formatTimeAgo(comment.createdAt)}</span>
-        </div>
-        <p className="text-sm leading-relaxed">{comment.content}</p>
-        <div className="mt-1 flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleCommentLike}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                liked
-                  ? "bg-accent/10 text-accent"
-                  : "text-muted hover:bg-surface hover:text-foreground"
-              }`}
-            >
-              <ThumbsUp size={14} fill={liked ? "currentColor" : "none"} />
-            </button>
-            <span className="text-xs text-muted">{likeCount}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handleCommentDislike}
-              className={`flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                disliked
-                  ? "bg-red-500/10 text-red-500"
-                  : "text-muted hover:bg-surface hover:text-foreground"
-              }`}
-            >
-              <ThumbsDown size={14} fill={disliked ? "currentColor" : "none"} />
-            </button>
-            <span className="text-xs text-muted">{dislikeCount}</span>
-          </div>
-          {comment.replyCount > 0 && (
-            <span className="text-xs text-muted">{comment.replyCount} replies</span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export default function PostDetail({ params }: PostDetailProps) {
   const { user, isAuthenticated } = useAuth();
+  const { show: showToast } = useToast();
   const { id: postId } = use(params);
 
-  const avatarText = user?.displayName
-    ? getAvatarText(user.displayName)
-    : "YO";
+  const avatarText = user?.displayName ? getAvatarText(user.displayName) : "YO";
 
   const [post, setPost] = useState<Post | null>(null);
   const [postLoading, setPostLoading] = useState(true);
@@ -188,6 +81,40 @@ export default function PostDetail({ params }: PostDetailProps) {
   const [saved, setSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [dislikeCount, setDislikeCount] = useState(0);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
+
+  const getPostUrl = () => {
+    if (typeof window === "undefined") return "";
+    return `${window.location.origin}/post/${postId}`;
+  };
+
+  const handleShare = async () => {
+    const url = getPostUrl();
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post?.content.substring(0, 60), url });
+      } catch {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast("Link copied to clipboard", "success");
+      } catch {
+        showToast("Failed to copy link", "error");
+      }
+    }
+  };
 
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<ApiComment[]>([]);
@@ -195,9 +122,9 @@ export default function PostDetail({ params }: PostDetailProps) {
   const [commentsError, setCommentsError] = useState("");
   const [totalComments, setTotalComments] = useState(0);
   const [posting, setPosting] = useState(false);
-
-  const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
-  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [composerFocused, setComposerFocused] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   useEffect(() => {
     if (!postId) {
@@ -216,6 +143,8 @@ export default function PostDetail({ params }: PostDetailProps) {
         setPost(mapped);
         setLikeCount(mapped.likes);
         setDislikeCount(mapped.dislikes);
+        setLiked(mapped.userVote === "LIKE");
+        setDisliked(mapped.userVote === "DISLIKE");
         setPostLoading(false);
       })
       .catch((err: unknown) => {
@@ -244,19 +173,6 @@ export default function PostDetail({ params }: PostDetailProps) {
       });
     return () => { cancelled = true; };
   }, [postId]);
-
-  useEffect(() => {
-    if (!postId || !user) return;
-    setRelatedLoading(true);
-    getContextualRecommendations(user.id, {
-      type: "posts",
-      limit: 5,
-      contextPostId: postId,
-    })
-      .then((data) => setRelatedPosts(data.posts.map(mapFeedPost)))
-      .catch(() => {})
-      .finally(() => setRelatedLoading(false));
-  }, [postId, user]);
 
   const handleLike = async () => {
     const wasLiked = liked;
@@ -324,6 +240,7 @@ export default function PostDetail({ params }: PostDetailProps) {
       setComments((prev) => [newComment, ...prev]);
       setTotalComments((prev) => prev + 1);
       setCommentText("");
+      setComposerFocused(false);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to post comment";
       setCommentsError(message);
@@ -335,37 +252,25 @@ export default function PostDetail({ params }: PostDetailProps) {
   if (postLoading) {
     return (
       <div className="flex flex-col gap-6 pb-8">
-        <div className="sticky top-0 z-10 flex items-center gap-3 bg-background/80 px-2 py-3 backdrop-blur-xl">
-          <Link
-            href="/"
-            className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface"
-          >
-            <ArrowLeft size={20} />
-          </Link>
+        <div className="sticky top-0 z-10 flex items-center gap-3 bg-background/85 px-2 py-3 backdrop-blur-2xl">
+          <BackButton fallback="/" />
           <div className="h-5 w-20 animate-pulse rounded-full bg-surface" />
         </div>
-        <div className="flex flex-col gap-4 rounded-3xl bg-card p-4 shadow-sm ring-1 ring-border animate-pulse">
-          <div className="h-4 w-3/4 rounded-full bg-surface" />
-          <div className="h-4 w-full rounded-full bg-surface" />
-          <div className="h-4 w-1/2 rounded-full bg-surface" />
-          <div className="h-48 rounded-2xl bg-surface" />
+        <PostSkeleton />
+        <div className="flex flex-col gap-3">
+          <SkeletonPulse className="h-8 w-32 rounded-full" />
+          <div className="flex gap-3">
+            <SkeletonPulse className="h-10 w-10 rounded-full shrink-0" />
+            <SkeletonPulse className="h-24 flex-1 rounded-2xl" />
+          </div>
       </div>
 
-      {/* Related Posts */}
-      {relatedLoading && (
-        <div className="flex items-center justify-center py-8 text-muted">
-          <Loader2 size={24} className="animate-spin" />
-        </div>
-      )}
-      {!relatedLoading && relatedPosts.length > 0 && (
-        <div className="flex flex-col gap-4">
-          <h2 className="text-lg font-bold">Related Posts</h2>
-          <div className="flex flex-col gap-4">
-            {relatedPosts.map((p) => (
-              <PostCard key={p.id} post={p} />
-            ))}
-          </div>
-        </div>
+      {previewOpen && post && (
+        <ImagePreviewModal
+          post={post}
+          startIndex={previewIndex}
+          onClose={() => setPreviewOpen(false)}
+        />
       )}
     </div>
   );
@@ -373,11 +278,13 @@ export default function PostDetail({ params }: PostDetailProps) {
 
   if (postError || !post) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-muted">
-        <MessageCircle size={48} className="mb-4 opacity-30" />
-        <p className="text-xl font-bold">Post not found</p>
-        <p className="mt-1 text-sm">{postError || "This post could not be loaded."}</p>
-        <Link href="/" className="mt-4 text-accent hover:underline">
+      <div className="flex flex-col items-center justify-center gap-3 py-20 text-muted">
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500/10">
+          <AlertCircle size={28} className="text-red-500/70" />
+        </div>
+        <p className="text-xl font-bold text-foreground">Post not found</p>
+        <p className="text-sm">{postError || "This post could not be loaded."}</p>
+        <Link href="/" className="mt-2 text-accent hover:underline underline-offset-4 font-medium">
           Back to feed
         </Link>
       </div>
@@ -387,105 +294,156 @@ export default function PostDetail({ params }: PostDetailProps) {
   const mediaCount = post.media?.length ?? 0;
 
   return (
-    <div className="flex flex-col gap-6 pb-8">
-      <div className="sticky top-0 z-10 flex items-center gap-3 bg-background/80 px-2 py-3 backdrop-blur-xl">
-        <Link
-          href="/"
-          className="flex h-10 w-10 items-center justify-center rounded-full transition-colors hover:bg-surface"
-        >
-          <ArrowLeft size={20} />
-        </Link>
-        <h1 className="text-lg font-bold">Post</h1>
+    <div className="flex flex-col gap-0 pb-8">
+      {/* Header */}
+      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between bg-background/85 px-4 py-3 backdrop-blur-2xl md:-mx-0 md:px-0">
+        <div className="flex items-center gap-1">
+          <BackButton fallback="/" variant="icon" />
+          <h1 className="text-base font-bold">Post</h1>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-4 overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-border">
-        <div className="flex flex-col gap-3 px-4 pt-4">
+      {/* Post Card */}
+      <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-border">
+        <div className="flex flex-col gap-4 p-5 sm:p-6">
+          {/* Author */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white">
-                {post.author.avatar}
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden shadow-sm">
+                {post.author.avatarUrl ? (
+                  <img src={post.author.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                ) : (
+                  post.author.avatar
+                )}
               </div>
               <div>
-                <p className="text-sm font-bold">{post.author.name}</p>
+                <p className="text-sm font-bold leading-tight">{post.author.name}</p>
                 <p className="text-xs text-muted">{post.author.handle}</p>
               </div>
             </div>
-            <span className="text-xs text-muted">{post.timestamp}</span>
+            <div className="flex items-center gap-1 text-xs text-muted">
+              <Clock size={12} />
+              <span>{post.timestamp}</span>
+            </div>
           </div>
 
-          <p className="text-lg leading-relaxed">{post.content}</p>
+          {/* Content */}
+          <p className="text-[17px] leading-relaxed text-foreground/90 whitespace-pre-wrap">
+            {post.content}
+          </p>
 
+          {/* Media */}
           {post.media && post.media.length > 0 && (
-            <div className={`grid gap-1 overflow-hidden rounded-2xl ${mediaCount === 1 ? 'grid-cols-1' : 'grid-cols-2'} max-h-[360px]`}>
-              {post.media.map((item, index) => (
+            mediaCount === 1 ? (
+              <div
+                className="overflow-hidden rounded-2xl cursor-zoom-in relative"
+                onClick={() => { setPreviewIndex(0); setPreviewOpen(true); }}
+              >
+                {post.media[0].type === "video" ? (
+                  <video src={post.media[0].url} className="w-full h-auto max-h-[400px] object-cover" controls preload="none" />
+                ) : (
+                  <img src={post.media[0].url} alt="" loading="lazy" className="w-full h-auto max-h-[400px] object-cover" />
+                )}
+              </div>
+            ) : mediaCount === 3 ? (
+              <div className="grid grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-2xl max-h-[400px]">
                 <div
-                  key={index}
-                  className={`relative overflow-hidden ${mediaCount === 3 && index === 0 ? 'row-span-2' : ''}`}
+                  className="row-span-2 relative overflow-hidden bg-surface cursor-zoom-in"
+                  onClick={() => { setPreviewIndex(0); setPreviewOpen(true); }}
                 >
-                  {item.type === "video" ? (
-                    <video
-                      src={item.url}
-                      className="h-full w-full object-cover"
-                      controls
-                    />
+                  {post.media[0].type === "video" ? (
+                    <video src={post.media[0].url} className="h-full w-full object-cover" controls preload="none" />
                   ) : (
-                    <img
-                      src={item.url}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
+                    <img src={post.media[0].url} alt="" loading="lazy" className="h-full w-full object-cover" />
                   )}
                 </div>
-              ))}
-            </div>
+                <div
+                  className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
+                  onClick={() => { setPreviewIndex(1); setPreviewOpen(true); }}
+                >
+                  {post.media[1].type === "video" ? (
+                    <video src={post.media[1].url} className="h-full w-full object-cover" controls preload="none" />
+                  ) : (
+                    <img src={post.media[1].url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div
+                  className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
+                  onClick={() => { setPreviewIndex(2); setPreviewOpen(true); }}
+                >
+                  {post.media[2].type === "video" ? (
+                    <video src={post.media[2].url} className="h-full w-full object-cover" controls preload="none" />
+                  ) : (
+                    <img src={post.media[2].url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1.5 overflow-hidden rounded-2xl max-h-[400px]">
+                {post.media.slice(0, 4).map((item, index) => {
+                  const showOverlay = mediaCount > 4 && index === 3;
+                  return (
+                    <div
+                      key={index}
+                      className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
+                      onClick={() => { setPreviewIndex(index); setPreviewOpen(true); }}
+                    >
+                      {item.type === "video" ? (
+                        <video src={item.url} className="h-full w-full object-cover" controls preload="none" />
+                      ) : (
+                        <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      )}
+                      {showOverlay && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-lg font-bold text-white backdrop-blur-[2px]">
+                          +{mediaCount - 4}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )
           )}
 
-          <div className="flex items-center justify-between border-t border-border pt-3">
-            <div className="flex items-center gap-1">
+          {/* Action Bar */}
+          <div className="flex items-center justify-between border-t border-border/60 pt-4">
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={handleLike}
-                className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                className={`flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-all ${
                   liked
                     ? "bg-accent/10 text-accent"
                     : "text-muted hover:bg-surface hover:text-foreground"
                 }`}
               >
-                <ThumbsUp size={20} fill={liked ? "currentColor" : "none"} />
+                <ThumbsUp size={18} fill={liked ? "currentColor" : "none"} />
+                {likeCount > 0 && <span className="tabular-nums">{likeCount}</span>}
               </button>
-              <span className="min-w-[1.5rem] text-sm font-bold tabular-nums">
-                {likeCount}
-              </span>
 
               <button
                 onClick={handleDislike}
-                className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
+                className={`flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-all ${
                   disliked
                     ? "bg-red-500/10 text-red-500"
                     : "text-muted hover:bg-surface hover:text-foreground"
                 }`}
               >
-                <ThumbsDown size={20} fill={disliked ? "currentColor" : "none"} />
+                <ThumbsDown size={18} fill={disliked ? "currentColor" : "none"} />
+                {dislikeCount > 0 && <span className="tabular-nums text-muted">{dislikeCount}</span>}
               </button>
-              <span className="min-w-[1.5rem] text-sm font-bold tabular-nums text-muted">
-                {dislikeCount}
-              </span>
 
-              <button className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground">
-                <MessageCircle size={20} />
+              <button className="flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-muted transition-all hover:bg-surface hover:text-foreground">
+                <MessageCircle size={18} />
+                {totalComments > 0 && <span className="tabular-nums">{totalComments}</span>}
               </button>
-              <span className="min-w-[1.5rem] text-sm font-bold tabular-nums text-muted">
-                {totalComments}
-              </span>
 
-              <button className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground">
-                <Repeat size={20} />
+              <button className="flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-muted transition-all hover:bg-surface hover:text-foreground">
+                <Repeat size={18} />
+                {post.reposts > 0 && <span className="tabular-nums">{post.reposts}</span>}
               </button>
-              <span className="min-w-[1.5rem] text-sm font-bold tabular-nums text-muted">
-                {post.reposts}
-              </span>
             </div>
 
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={() => setSaved(!saved)}
                 className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
@@ -494,43 +452,100 @@ export default function PostDetail({ params }: PostDetailProps) {
                     : "text-muted hover:bg-surface hover:text-foreground"
                 }`}
               >
-                <Bookmark size={20} fill={saved ? "currentColor" : "none"} />
+                <Bookmark size={18} fill={saved ? "currentColor" : "none"} />
               </button>
-              <button className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground">
-                <Share2 size={20} />
+              <button
+                onClick={handleShare}
+                className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground"
+              >
+                <Share2 size={18} />
               </button>
+              <div className="relative">
+                <button
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-all hover:bg-surface hover:text-foreground"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+                {menuOpen && (
+                  <div
+                    ref={menuRef}
+                    className="absolute bottom-full right-0 mb-2 w-44 overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border animate-in fade-in zoom-in-95 duration-150 z-50"
+                  >
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(getPostUrl());
+                          showToast("Link copied", "success");
+                        } catch {
+                          showToast("Failed to copy", "error");
+                        }
+                        setMenuOpen(false);
+                      }}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-surface"
+                    >
+                      <Copy size={16} className="text-muted" />
+                      Copy Link
+                    </button>
+                    <a
+                      href={getPostUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex w-full items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-surface"
+                    >
+                      <ExternalLink size={16} className="text-muted" />
+                      Open
+                    </a>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-bold">
-          Comments <span className="text-muted">({totalComments})</span>
-        </h2>
+      {/* Comments Section */}
+      <div className="mt-6 flex flex-col gap-0">
+        <div className="flex items-center gap-2 px-1 mb-4">
+          <MessageCircle size={18} className="text-accent" />
+          <h2 className="text-base font-bold">
+            Comments
+            <span className="ml-1.5 text-sm font-medium text-muted">{totalComments}</span>
+          </h2>
+        </div>
 
+        {/* Comment Composer */}
         {isAuthenticated && (
-          <div className="flex gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white">
+          <div className="flex gap-3 mb-2 px-1">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white overflow-hidden shadow-sm">
               {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                <img src={user.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
               ) : (
                 avatarText
               )}
             </div>
             <div className="flex flex-1 flex-col gap-2">
-              <textarea
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Add a comment..."
-                className="w-full resize-none rounded-2xl bg-card p-3 text-sm ring-1 ring-border outline-none transition-all placeholder:text-muted/60 focus:ring-2 focus:ring-accent/30"
-                rows={2}
-              />
+              <div className={`rounded-2xl bg-card ring-1 p-3.5 transition-all ${
+                composerFocused ? "ring-2 ring-accent/30 shadow-sm" : "ring-border"
+              }`}>
+                <MentionTextarea
+                  value={commentText}
+                  onChange={(val) => setCommentText(val)}
+                  placeholder="Add a comment..."
+                  rows={composerFocused ? 3 : 1}
+                  className="placeholder:text-muted/50"
+                />
+              </div>
               <div className="flex justify-end">
                 <button
                   onClick={handleComment}
                   disabled={!commentText.trim() || posting}
-                  className="flex h-9 items-center gap-2 rounded-full bg-foreground px-4 text-sm font-bold text-background transition-opacity hover:opacity-80 disabled:opacity-30"
+                  className={`flex h-10 items-center gap-2 rounded-full px-5 text-sm font-bold text-background transition-all ${
+                    commentText.trim()
+                      ? "bg-foreground hover:opacity-80 shadow-lg shadow-foreground/10"
+                      : "bg-muted opacity-50"
+                  }`}
                 >
                   {posting ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -544,34 +559,57 @@ export default function PostDetail({ params }: PostDetailProps) {
           </div>
         )}
 
+        {/* Error */}
         {commentsError && (
-          <div className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
-            {commentsError}
+          <div className="mx-1 my-2 flex items-start gap-2 rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500 animate-in fade-in">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <span>{commentsError}</span>
           </div>
         )}
 
+        {/* Loading */}
         {commentsLoading && (
-          <div className="flex items-center justify-center py-12 text-muted">
-            <Loader2 size={28} className="animate-spin" />
+          <div className="flex flex-col gap-0 py-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex gap-3 py-3">
+                <SkeletonPulse className="h-9 w-9 rounded-full shrink-0" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <SkeletonPulse className="h-4 w-32 rounded-full" />
+                  <SkeletonPulse className="h-3 w-3/4 rounded-full" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
+        {/* Empty */}
         {!commentsLoading && !commentsError && comments.length === 0 && (
-          <div className="flex flex-col items-center justify-center rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
-            <MessageCircle size={32} className="mb-3 opacity-40" />
-            <p className="text-sm font-bold">No comments yet</p>
-            <p className="text-xs">Be the first to share your thoughts</p>
+          <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-14 text-muted ring-1 ring-border my-2">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+              <MessageCircle size={24} className="text-accent" />
+            </div>
+            <p className="text-base font-bold text-foreground">No comments yet</p>
+            <p className="text-sm">Be the first to share your thoughts</p>
           </div>
         )}
 
-        {!commentsLoading && (
-          <div className="flex flex-col gap-3">
+        {/* Comments List */}
+        {!commentsLoading && comments.length > 0 && (
+          <div className="flex flex-col divide-y divide-border/50">
             {comments.map((comment) => (
               <CommentCard key={comment.id} comment={comment} />
             ))}
           </div>
         )}
       </div>
+
+      {previewOpen && post && (
+        <ImagePreviewModal
+          post={post}
+          startIndex={previewIndex}
+          onClose={() => setPreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

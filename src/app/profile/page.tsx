@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  MapPin,
-  Link as LinkIcon,
   Calendar,
-  Users,
   Flame,
+  Globe,
   Loader2,
   Image as ImageIcon,
   MessageCircle,
+  MapPin,
 } from "lucide-react";
 import {
   getCurrentUser,
@@ -19,6 +19,8 @@ import {
 } from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
 import PostCard from "@/components/PostCard";
+import BackButton from "@/components/BackButton";
+import { ProfileSkeleton, PostSkeletonList } from "@/components/Skeleton";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -86,23 +88,37 @@ export default function ProfilePage() {
 
   const mediaPosts = posts.filter((p) => p.media && p.media.length > 0);
 
+  if (profileLoading && !profile) {
+    return <ProfileSkeleton />;
+  }
+
   return (
     <div className="flex flex-col gap-6 pb-8">
+      <BackButton fallback="/" />
+
       {/* Banner & Avatar */}
-      <div className="relative">
-        <div className="aspect-[3/1] w-full overflow-hidden rounded-3xl bg-gradient-to-br from-accent/20 to-accent-2/20">
-          <img
-            src="https://images.unsplash.com/photo-1557683316-973673baf926?w=1200&q=80"
-            alt="Banner"
-            className="h-full w-full object-cover"
-          />
+      <div className="relative -mx-4 md:-mx-0">
+        <div
+          className="aspect-[3/1] w-full overflow-hidden rounded-3xl bg-gradient-to-br from-accent/20 to-accent-2/20"
+          style={
+            displayUser?.headerImageUrl
+              ? { backgroundImage: `url(${displayUser.headerImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+              : undefined
+          }
+        >
+          {!displayUser?.headerImageUrl && (
+            <div className="flex h-full w-full items-center justify-center">
+              <MapPin size={32} className="text-muted/20" />
+            </div>
+          )}
         </div>
-        <div className="absolute -bottom-10 left-6 z-10">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-2xl font-black text-white shadow-lg ring-4 ring-background overflow-hidden">
+        <div className="absolute -bottom-8 left-4 md:left-6 z-10">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-2xl font-black text-white shadow-xl ring-4 ring-background overflow-hidden">
             {displayUser?.avatarUrl ? (
               <img
                 src={displayUser.avatarUrl}
                 alt=""
+                loading="lazy"
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -113,74 +129,85 @@ export default function ProfilePage() {
       </div>
 
       {/* Profile info */}
-      <div className="mt-8 px-2">
-        {profileLoading && !profile && (
-          <div className="animate-pulse space-y-3">
-            <div className="h-6 w-48 rounded-full bg-surface" />
-            <div className="h-4 w-32 rounded-full bg-surface" />
-            <div className="h-4 w-3/4 rounded-full bg-surface" />
-          </div>
-        )}
-
-        {!profileLoading && (
-          <>
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-black">
-                    {displayUser?.displayName || "Unknown"}
-                  </h1>
-                  {displayUser?.isVerified && (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
-                      ✓
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm text-muted">
-                  @{displayUser?.username || "unknown"}
-                </p>
-              </div>
-              <button className="rounded-full bg-surface px-5 py-2 text-sm font-bold transition-colors hover:bg-border">
-                Edit Profile
-              </button>
-            </div>
-
-            {displayUser?.bio && (
-              <p className="mt-3 text-[15px] leading-relaxed">
-                {displayUser.bio}
-              </p>
-            )}
-
-            <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted">
-              {displayUser?.karma !== undefined && (
-                <span className="flex items-center gap-1">
-                  <Flame size={15} />
-                  {displayUser.karma} karma
+      <div className="mt-6 px-2">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-black">
+                {displayUser?.displayName || "Unknown"}
+              </h1>
+              {displayUser?.isVerified && (
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+                  ✓
                 </span>
               )}
-              <span className="flex items-center gap-1">
-                <Calendar size={15} />
-                Joined{" "}
-                {displayUser?.createdAt
-                  ? formatDate(displayUser.createdAt)
-                  : "recently"}
-              </span>
             </div>
+            <p className="text-sm text-muted">
+              @{displayUser?.username || "unknown"}
+            </p>
+          </div>
+          <Link
+            href="/settings/edit-profile"
+            className="rounded-full bg-surface px-5 py-2.5 text-sm font-bold transition-all hover:bg-border active:scale-95"
+          >
+            Edit Profile
+          </Link>
+        </div>
 
-            <div className="mt-4 flex gap-5 text-sm">
-              <span className="flex items-center gap-1">
-                <strong className="text-foreground">{posts.length}</strong>
-                <span className="text-muted">Posts</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <strong className="text-foreground">
-                  {mediaPosts.length}
-                </strong>
-                <span className="text-muted">Media</span>
-              </span>
-            </div>
-          </>
+        {displayUser?.bio && (
+          <p className="mt-3 text-[15px] leading-relaxed">
+            {displayUser.bio}
+          </p>
         )}
+
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted">
+          {displayUser?.location && (
+            <span className="flex items-center gap-1.5">
+              <MapPin size={15} />
+              {displayUser.location}
+            </span>
+          )}
+          {displayUser?.website && (
+            <a
+              href={displayUser.website.startsWith("http") ? displayUser.website : `https://${displayUser.website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-accent hover:underline"
+            >
+              <Globe size={15} />
+              {displayUser.website.replace(/^https?:\/\//, "")}
+            </a>
+          )}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted">
+          {displayUser?.karma !== undefined && (
+            <span className="flex items-center gap-1.5">
+              <Flame size={15} className="text-accent" />
+              <span className="font-semibold text-foreground">{displayUser.karma}</span> karma
+            </span>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Calendar size={15} />
+            Joined{" "}
+            {displayUser?.createdAt
+              ? formatDate(displayUser.createdAt)
+              : "recently"}
+          </span>
+        </div>
+
+        <div className="mt-4 flex gap-5 text-sm">
+          <span className="flex items-center gap-1.5">
+            <strong className="text-foreground text-lg font-bold tabular-nums">{posts.length}</strong>
+            <span className="text-muted">Posts</span>
+          </span>
+          <span className="flex items-center gap-1.5">
+            <strong className="text-foreground text-lg font-bold tabular-nums">
+              {mediaPosts.length}
+            </strong>
+            <span className="text-muted">Media</span>
+          </span>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -189,7 +216,7 @@ export default function ProfilePage() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 rounded-xl py-2 text-sm font-bold transition-all ${
+            className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition-all ${
               activeTab === tab
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted hover:text-foreground"
@@ -201,24 +228,26 @@ export default function ProfilePage() {
       </div>
 
       {/* Content */}
-      {postsLoading && (
-        <div className="flex items-center justify-center py-16 text-muted">
-          <Loader2 size={32} className="animate-spin" />
-        </div>
-      )}
+      {postsLoading && <PostSkeletonList count={2} />}
 
       {!postsLoading && error && (
-        <div className="rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
-          {error}
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+            <MessageCircle size={24} className="text-red-500/70" />
+          </div>
+          <p className="text-sm font-bold text-foreground">Failed to load posts</p>
+          <p className="text-xs">{error}</p>
         </div>
       )}
 
       {!postsLoading && !error && activeTab === "Posts" && (
         <>
           {posts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
-              <MessageCircle size={40} className="mb-3 opacity-40" />
-              <p className="text-lg font-bold">No posts yet</p>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+                <MessageCircle size={24} className="text-accent" />
+              </div>
+              <p className="text-lg font-bold text-foreground">No posts yet</p>
               <p className="text-sm">Posts will appear here</p>
             </div>
           ) : (
@@ -234,9 +263,11 @@ export default function ProfilePage() {
       {!postsLoading && !error && activeTab === "Media" && (
         <>
           {mediaPosts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
-              <ImageIcon size={40} className="mb-3 opacity-40" />
-              <p className="text-lg font-bold">No media yet</p>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+                <ImageIcon size={24} className="text-accent" />
+              </div>
+              <p className="text-lg font-bold text-foreground">No media yet</p>
               <p className="text-sm">Uploaded images and videos appear here</p>
             </div>
           ) : (
@@ -245,7 +276,7 @@ export default function ProfilePage() {
                 (p.media || []).map((m, i) => (
                   <div
                     key={`${p.id}-${i}`}
-                    className="aspect-square overflow-hidden rounded-2xl ring-1 ring-border"
+                    className="aspect-square overflow-hidden rounded-2xl ring-1 ring-border transition-all hover:ring-accent/30 hover:shadow-md"
                   >
                     {m.type === "video" ? (
                       <video
@@ -254,12 +285,14 @@ export default function ProfilePage() {
                         muted
                         loop
                         playsInline
+                        preload="none"
                       />
                     ) : (
                       <img
                         src={m.url}
                         alt=""
-                        className="h-full w-full object-cover"
+                        loading="lazy"
+                        className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
                       />
                     )}
                   </div>
@@ -271,9 +304,11 @@ export default function ProfilePage() {
       )}
 
       {!postsLoading && !error && activeTab === "Likes" && (
-        <div className="flex flex-col items-center justify-center rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
-          <Flame size={40} className="mb-3 opacity-40" />
-          <p className="text-lg font-bold">Coming Soon</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+            <Flame size={24} className="text-accent" />
+          </div>
+          <p className="text-lg font-bold text-foreground">Coming Soon</p>
           <p className="text-sm">Liked posts will appear here</p>
         </div>
       )}

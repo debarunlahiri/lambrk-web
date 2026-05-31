@@ -3,10 +3,10 @@
 import { useSyncExternalStore, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { Search, PenLine, User, Settings, LogOut, ChevronRight, Bell } from "lucide-react";
+import { Search, PenLine, User, Settings, LogOut, Bell, ChevronDown, X } from "lucide-react";
 import { useWebSocket } from "@/contexts/WebSocketContext";
+import { useRouter } from "next/navigation";
 
 function useIsClient() {
   return useSyncExternalStore(
@@ -16,40 +16,18 @@ function useIsClient() {
   );
 }
 
-const links = [
-  { name: "Feed", href: "/" },
-  { name: "Explore", href: "/explore" },
-  { name: "Hot", href: "/hot" },
-];
-
 export default function TopNav() {
-  const pathname = usePathname();
+  const router = useRouter();
   const { user, isAuthenticated, logout } = useAuth();
   const isClient = useIsClient();
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [buttonRect, setButtonRect] = useState<DOMRect | null>(null);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
   const { unreadCount } = useWebSocket();
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      const target = e.target as Node;
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(target) &&
-        buttonRef.current !== target &&
-        !buttonRef.current?.contains(target)
-      ) {
-        setDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const avatarText = user?.displayName
     ? user.displayName
         .split(" ")
@@ -57,22 +35,26 @@ export default function TopNav() {
         .join("")
         .slice(0, 2)
         .toUpperCase()
-    : "YO";
+    : "?";
 
-  const dropdownPortal = dropdownOpen && (
-    createPortal(
-      <div
-        ref={dropdownRef}
-        className="fixed z-[100] w-64 overflow-hidden rounded-2xl bg-card shadow-2xl ring-1 ring-border animate-in fade-in slide-in-from-top-2 duration-150"
-        style={{
-          top: (buttonRect?.bottom ?? 0) + 4,
-          right: (typeof window !== 'undefined' ? window.innerWidth : 0) - (buttonRect?.right ?? 0),
-        }}
-      >
-        <div className="flex items-center gap-3 border-b border-border px-4 py-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white">
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const Dropdown = () =>
+    dropdownOpen ? (
+      <div className="absolute right-0 top-full z-[100] mt-2 w-72 overflow-hidden rounded-3xl bg-card shadow-2xl ring-1 ring-border animate-in fade-in zoom-in-95 duration-150">
+        <Link
+          href="/profile"
+          onClick={() => setDropdownOpen(false)}
+          className="flex items-center gap-3 border-b border-border px-5 py-4 transition-colors hover:bg-surface"
+        >
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden shadow-md">
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+              <img src={user.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
             ) : (
               avatarText
             )}
@@ -81,151 +63,178 @@ export default function TopNav() {
             <p className="truncate text-sm font-bold">{user?.displayName}</p>
             <p className="truncate text-xs text-muted">@{user?.username}</p>
           </div>
-        </div>
+        </Link>
 
-        <div className="py-1">
+        <div className="py-1.5">
           <Link
             href="/profile"
             onClick={() => setDropdownOpen(false)}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-surface"
+            className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-surface"
           >
             <User size={18} className="text-muted" />
-            <span className="flex-1">View Profile</span>
-            <ChevronRight size={14} className="text-muted" />
+            <span className="flex-1">Profile</span>
           </Link>
+          <Link
+            href="/compose"
+            onClick={() => setDropdownOpen(false)}
+            className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-surface"
+          >
+            <PenLine size={18} className="text-muted" />
+            <span className="flex-1">Create Post</span>
+          </Link>
+          <Link
+            href="/notifications"
+            onClick={() => setDropdownOpen(false)}
+            className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-surface"
+          >
+            <span className="relative">
+              <Bell size={18} className="text-muted" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-bold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </span>
+            <span className="flex-1">Notifications</span>
+            {unreadCount > 0 && (
+              <span className="text-xs tabular-nums text-muted">{unreadCount} new</span>
+            )}
+          </Link>
+        </div>
+
+        <div className="border-t border-border py-1.5">
           <Link
             href="/settings"
             onClick={() => setDropdownOpen(false)}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-surface"
+            className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors hover:bg-surface"
           >
             <Settings size={18} className="text-muted" />
             <span>Settings</span>
           </Link>
-        </div>
-
-        <div className="border-t border-border py-1">
           <button
             onClick={() => {
               setDropdownOpen(false);
               setShowLogoutConfirm(true);
             }}
-            className="flex w-full items-center gap-3 px-4 py-2.5 text-sm text-red-500 transition-colors hover:bg-red-500/5"
+            className="flex w-full items-center gap-3 px-5 py-2.5 text-sm font-medium text-red-500 transition-colors hover:bg-red-500/5"
           >
             <LogOut size={18} />
             <span>Sign Out</span>
           </button>
         </div>
-      </div>,
-      document.body
-    )
-  );
+      </div>
+    ) : null;
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-xl font-black tracking-tight">
-          <span className="gradient-text">lambrk</span>
+    <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/85 backdrop-blur-2xl">
+      <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-2.5">
+        {/* Left: Logo */}
+        <Link href="/" className="flex items-center gap-2 shrink-0">
+          <img src="/lambrk.png" alt="Lambrk" className="h-8 w-8 rounded-lg object-cover shadow-md shadow-accent/20" />
+          <span className="text-lg font-black tracking-tight hidden sm:block">
+            <span className="gradient-text">lambrk</span>
+          </span>
         </Link>
 
-        <nav className="hidden items-center gap-1 rounded-full bg-surface p-1 md:flex">
-          {links.map((link) => {
-            const isActive = pathname === link.href;
-            return (
-              <Link
-                key={link.name}
-                href={link.href}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
-                  isActive
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted hover:text-foreground"
+        {/* Center: Search bar */}
+        <form onSubmit={handleSearch} className="flex-1 mx-auto max-w-md">
+          <div className={`relative flex items-center rounded-full bg-surface ring-1 transition-all ${searchFocused ? "ring-2 ring-accent/40 bg-card" : "ring-border hover:ring-accent/20"}`}>
+            <Search size={16} className="absolute left-3 text-muted shrink-0" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              placeholder="Search..."
+              className="flex-1 bg-transparent py-2 pl-9 pr-8 text-sm outline-none placeholder:text-muted/50"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-2 flex h-6 w-6 items-center justify-center rounded-full bg-border/50 text-muted hover:bg-border hover:text-foreground transition-colors"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Right: User pill */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isClient && isAuthenticated ? (
+            <div className="relative">
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className={`flex items-center gap-1.5 rounded-full pr-2 pl-1 py-1 text-sm font-semibold transition-all ${
+                  dropdownOpen ? "bg-surface ring-1 ring-border" : "hover:bg-surface"
                 }`}
               >
-                {link.name}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/search"
-            className="flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-foreground"
-          >
-            <Search size={20} />
-          </Link>
-
-          {isClient && isAuthenticated ? (
-            <>
-              <Link
-                href="/notifications"
-                className="relative flex h-10 w-10 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface hover:text-foreground"
-              >
-                <Bell size={20} />
-                {unreadCount > 0 && (
-                  <span className="absolute right-0.5 top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white tabular-nums">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </Link>
-              <Link
-                href="/compose"
-                className="flex h-10 items-center gap-2 rounded-full bg-foreground px-4 text-sm font-bold text-background transition-opacity hover:opacity-80"
-              >
-                <PenLine size={18} />
-                <span className="hidden md:inline">Create</span>
-              </Link>
-
-              <button
-                ref={buttonRef}
-                onClick={() => {
-                  if (buttonRef.current) {
-                    setButtonRect(buttonRef.current.getBoundingClientRect());
-                  }
-                  setDropdownOpen(!dropdownOpen);
-                }}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-xs font-bold text-white transition-transform hover:scale-105"
-              >
-                {avatarText}
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-[10px] font-bold text-white overflow-hidden shadow-sm">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  ) : (
+                    avatarText
+                  )}
+                </div>
+                <span className="hidden sm:inline max-w-[80px] truncate">{user?.displayName}</span>
+                <ChevronDown size={14} className={`hidden sm:block text-muted transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
               </button>
-            </>
+
+              <Dropdown />
+            </div>
           ) : (
             <>
               <Link
                 href="/login"
-                className="rounded-full px-4 py-2 text-sm font-bold text-muted transition-colors hover:text-foreground"
+                className="rounded-full px-4 py-2 text-sm font-bold text-muted transition-colors hover:text-foreground hover:bg-surface"
               >
                 Sign In
               </Link>
               <Link
                 href="/register"
-                className="flex h-10 items-center gap-2 rounded-full bg-foreground px-4 text-sm font-bold text-background transition-opacity hover:opacity-80"
+                className="rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background shadow-sm shadow-foreground/10 transition-all hover:opacity-80"
               >
-                <User size={18} />
-                <span className="hidden md:inline">Join</span>
+                Join
               </Link>
             </>
           )}
         </div>
       </div>
 
-      {dropdownPortal}
+      {dropdownOpen && (
+        <div
+          className="fixed inset-0 z-[99]"
+          onClick={() => setDropdownOpen(false)}
+        />
+      )}
 
       {showLogoutConfirm && (
         createPortal(
           <>
             <div
-              className="fixed inset-0 z-[200] bg-black/40 backdrop-blur-sm animate-in fade-in duration-150"
+              className="fixed inset-0 z-[200] bg-black/30 backdrop-blur-sm animate-in fade-in duration-200"
               onClick={() => setShowLogoutConfirm(false)}
             />
             <div className="fixed inset-x-4 top-1/2 z-[200] mx-auto max-w-sm -translate-y-1/2 rounded-3xl bg-card p-6 shadow-2xl ring-1 ring-border animate-in zoom-in-95 fade-in duration-200">
-              <h2 className="text-lg font-bold">Sign Out</h2>
-              <p className="mt-2 text-sm text-muted">
-                Are you sure you want to sign out of your account?
-              </p>
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+                  <LogOut size={24} className="text-red-500" />
+                </div>
+                <h2 className="text-xl font-bold">Sign Out</h2>
+                <p className="mt-2 text-sm text-muted">
+                  Are you sure you want to sign out of your account?
+                </p>
+              </div>
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => setShowLogoutConfirm(false)}
-                  className="flex-1 rounded-full bg-surface px-4 py-2.5 text-sm font-bold transition-colors hover:bg-border"
+                  className="flex-1 rounded-full bg-surface px-4 py-3 text-sm font-bold transition-colors hover:bg-border"
                 >
                   Cancel
                 </button>
@@ -234,7 +243,7 @@ export default function TopNav() {
                     setShowLogoutConfirm(false);
                     logout();
                   }}
-                  className="flex-1 rounded-full bg-red-500 px-4 py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-80"
+                  className="flex-1 rounded-full bg-red-500 px-4 py-3 text-sm font-bold text-white transition-opacity hover:opacity-80"
                 >
                   Sign Out
                 </button>

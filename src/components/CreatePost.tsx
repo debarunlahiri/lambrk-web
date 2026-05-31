@@ -2,19 +2,22 @@
 
 import { useState, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { uploadFile, ApiError } from "@/lib/api";
-import { Image as ImageIcon, Film, X, Sparkles, Loader2 } from "lucide-react";
+import { Image as ImageIcon, Film, X, Sparkles } from "lucide-react";
+
+interface PendingMedia {
+  type: "image" | "video";
+  file: File;
+  previewUrl: string;
+}
 
 interface CreatePostProps {
-  onPost: (content: string, media: { type: "image" | "video"; url: string }[]) => void;
+  onPost: (content: string, media: PendingMedia[]) => void;
 }
 
 export default function CreatePost({ onPost }: CreatePostProps) {
   const { user } = useAuth();
   const [content, setContent] = useState("");
-  const [media, setMedia] = useState<{ type: "image" | "video"; url: string }[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
+  const [media, setMedia] = useState<PendingMedia[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingType, setPendingType] = useState<"image" | "video" | null>(null);
 
@@ -31,49 +34,40 @@ export default function CreatePost({ onPost }: CreatePostProps) {
     if (!content.trim() && media.length === 0) return;
     onPost(content, media);
     setContent("");
+    media.forEach((m) => URL.revokeObjectURL(m.previewUrl));
     setMedia([]);
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !pendingType) return;
-    setUploading(true);
-    setUploadError("");
-    try {
-      const apiType = pendingType === "image" ? "POST_IMAGE" : "POST_VIDEO";
-      const uploaded = await uploadFile({
-        file,
-        type: apiType,
-        fileName: file.name,
-        description: "Post media",
-        isPublic: true,
-        isNSFW: false,
-      });
-      setMedia([...media, { type: pendingType, url: uploaded.fileUrl }]);
-    } catch (err: unknown) {
-      let message = "Upload failed. Please try again.";
-      if (err instanceof ApiError) {
-        message = err.message;
-      } else if (err instanceof Error) {
-        message = err.message;
-      }
-      setUploadError(message);
-    } finally {
-      setUploading(false);
-      setPendingType(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
+
+    const isGif = file.type === "image/gif";
+    if ((pendingType === "video" || isGif) && media.some((m) => m.type === "video" || m.file.type === "image/gif")) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setMedia((prev) => [...prev, { type: pendingType, file, previewUrl }]);
+    setPendingType(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
   const triggerUpload = (type: "image" | "video") => {
+    if (type === "video" && hasSingleOnly) return;
     setPendingType(type);
     fileInputRef.current?.click();
   };
 
+  const hasSingleOnly = media.some((m) => m.type === "video" || m.file.type === "image/gif");
+
   const removeMedia = (index: number) => {
-    setMedia(media.filter((_, i) => i !== index));
+    setMedia((prev) => {
+      const item = prev[index];
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   return (
@@ -91,12 +85,6 @@ export default function CreatePost({ onPost }: CreatePostProps) {
             rows={2}
           />
 
-          {uploadError && (
-            <div className="rounded-2xl bg-red-500/10 px-3 py-2 text-xs text-red-500">
-              {uploadError}
-            </div>
-          )}
-
           {media.length > 0 && (
             <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
               {media.map((item, index) => (
@@ -106,14 +94,16 @@ export default function CreatePost({ onPost }: CreatePostProps) {
                 >
                   {item.type === "image" ? (
                     <img
-                      src={item.url}
-                      alt=""
+                      src={item.previewUrl}
+                      alt={item.file.name}
+                      loading="lazy"
                       className="h-full w-full object-cover"
                     />
                   ) : (
                     <video
-                      src={item.url}
+                      src={item.previewUrl}
                       className="h-full w-full object-cover"
+                      preload="none"
                     />
                   )}
                   <button
@@ -138,27 +128,22 @@ export default function CreatePost({ onPost }: CreatePostProps) {
               />
               <button
                 onClick={() => triggerUpload("image")}
-                disabled={uploading}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10"
                 title="Add image"
               >
-                {uploading && pendingType === "image" ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <ImageIcon size={20} />
-                )}
+                <ImageIcon size={20} />
               </button>
               <button
                 onClick={() => triggerUpload("video")}
-                disabled={uploading}
-                className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
-                title="Add video"
+                disabled={hasSingleOnly}
+                className={`flex h-10 w-10 items-center justify-center rounded-full transition-colors ${
+                  hasSingleOnly
+                    ? "text-muted/40 cursor-not-allowed"
+                    : "text-accent hover:bg-accent/10"
+                }`}
+                title={hasSingleOnly ? "Only one video or GIF allowed" : "Add video"}
               >
-                {uploading && pendingType === "video" ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <Film size={20} />
-                )}
+                <Film size={20} />
               </button>
               <button className="flex h-10 w-10 items-center justify-center rounded-full text-accent-2 transition-colors hover:bg-accent-2/10">
                 <Sparkles size={20} />
@@ -166,7 +151,7 @@ export default function CreatePost({ onPost }: CreatePostProps) {
             </div>
             <button
               onClick={handleSubmit}
-              disabled={(!content.trim() && media.length === 0) || uploading}
+              disabled={!content.trim() && media.length === 0}
               className="rounded-full bg-foreground px-6 py-2.5 text-sm font-bold text-background transition-opacity hover:opacity-80 disabled:opacity-30"
             >
               Publish

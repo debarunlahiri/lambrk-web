@@ -18,6 +18,7 @@ export interface Post {
   comments: number;
   reposts: number;
   timestamp: string;
+  userVote?: string | null;
 }
 
 export type { FeedPost } from "@/lib/api";
@@ -54,15 +55,16 @@ export function mapFeedPost(post: FeedPost): Post {
       avatarUrl: post.author.avatarUrl,
     },
     content: post.content,
-    media: post.files?.map((f) => ({
-      type: f.mimeType.startsWith("video/") ? "video" : "image",
-      url: f.fileUrl,
+    media: post.media?.map((m) => ({
+      type: m.mimeType.startsWith("video/") ? "video" : "image",
+      url: m.url,
     })) || undefined,
     likes: post.likeCount,
     dislikes: post.dislikeCount,
     comments: post.commentCount,
     reposts: post.repostCount ?? 0,
     timestamp: formatTimeAgo(post.createdAt),
+    userVote: post.userVote,
   };
 }
 

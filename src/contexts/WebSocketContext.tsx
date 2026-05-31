@@ -6,6 +6,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   useRef,
   type ReactNode,
 } from "react";
@@ -76,8 +77,8 @@ export default function WebSocketProvider({ children }: { children: ReactNode })
         Authorization: `Bearer ${token}`,
       },
       reconnectDelay: 5000,
-      heartbeatIncoming: 10000,
-      heartbeatOutgoing: 10000,
+      heartbeatIncoming: 30000,
+      heartbeatOutgoing: 30000,
     });
 
     client.onConnect = () => {
@@ -156,16 +157,19 @@ export default function WebSocketProvider({ children }: { children: ReactNode })
     }
   }, [isAuthenticated]);
 
+  const value = useMemo(
+    () => ({
+      isConnected,
+      unreadCount,
+      notifications,
+      subscribeToPost,
+      unsubscribeFromPost,
+    }),
+    [isConnected, unreadCount, notifications, subscribeToPost, unsubscribeFromPost]
+  );
+
   return (
-    <WebSocketContext.Provider
-      value={{
-        isConnected,
-        unreadCount,
-        notifications,
-        subscribeToPost,
-        unsubscribeFromPost,
-      }}
-    >
+    <WebSocketContext.Provider value={value}>
       {children}
     </WebSocketContext.Provider>
   );

@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import PostCard from "./PostCard";
 import CreatePost from "./CreatePost";
 import { mapFeedPost, type Post } from "@/lib/data";
-import { getFeed, getFeedHot, getFeedNew, getFeedTop, createPost, type FeedPost } from "@/lib/api";
-import { Loader2, Sparkles, Flame, Clock, TrendingUp, Inbox } from "lucide-react";
+import { getFeed, getFeedHot, getFeedNew, getFeedTop, createPost, uploadFile, type FeedPost } from "@/lib/api";
+import { Sparkles, Flame, Clock, TrendingUp, Inbox, RefreshCw } from "lucide-react";
+import { PostSkeletonList } from "./Skeleton";
 
 type FeedTab = "algorithm" | "hot" | "new" | "top";
 
@@ -19,6 +21,7 @@ const tabs: { key: FeedTab; label: string; icon: typeof Sparkles }[] = [
 
 export default function Feed() {
   const { user, isAuthenticated } = useAuth();
+  const { show: showToast, update: updateToast } = useToast();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,14 +67,47 @@ export default function Feed() {
 
   const handleNewPost = async (
     content: string,
-    media: { type: "image" | "video"; url: string }[]
+    mediaFiles: { type: "image" | "video"; file: File; previewUrl: string }[]
   ) => {
+    const toastId = showToast(
+      mediaFiles.length > 0 ? "Uploading media..." : "Publishing post...",
+      "loading"
+    );
+
+    const uploadedFileIds: string[] = [];
+    const uploadedMedia: { type: "image" | "video"; url: string }[] = [];
     try {
-      const apiPost = await createPost({ content: content.trim(), postType: "TEXT" });
+      for (const m of mediaFiles) {
+        const apiType: "POST_IMAGE" | "POST_VIDEO" = m.type === "image" ? "POST_IMAGE" : "POST_VIDEO";
+        const uploaded = await uploadFile({
+          file: m.file,
+          type: apiType,
+          fileName: m.file.name,
+          description: "Post media",
+          isPublic: true,
+          isNSFW: false,
+        });
+        uploadedFileIds.push(uploaded.fileId);
+        uploadedMedia.push({ type: m.type, url: uploaded.fileUrl });
+      }
+
+      updateToast(toastId, "Creating post...", "loading");
+      const apiPost = await createPost({
+        content: content.trim(),
+        postType: uploadedFileIds.length > 0 ? "IMAGE" : "TEXT",
+        mediaIds: uploadedFileIds.length > 0 ? uploadedFileIds : undefined,
+      });
       const newPost = mapFeedPost(apiPost);
+      if (uploadedMedia.length > 0) {
+        newPost.media = uploadedMedia;
+      }
       setPosts((prev) => [newPost, ...prev]);
-    } catch {
-      // Optimistic fallback on failure
+      updateToast(toastId, "Post published!", "success");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to publish post";
+      updateToast(toastId, message, "error");
+
+      // Optimistic fallback so UI doesn't break
       const newPost: Post = {
         id: `pending-${Date.now()}`,
         author: {
@@ -88,7 +124,7 @@ export default function Feed() {
           avatarUrl: user?.avatarUrl,
         },
         content,
-        media: media.length > 0 ? media : undefined,
+        media: uploadedMedia,
         likes: 0,
         dislikes: 0,
         comments: 0,
@@ -126,22 +162,21 @@ export default function Feed() {
       </div>
 
       {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-16 text-muted">
-          <Loader2 size={32} className="animate-spin" />
-        </div>
-      )}
+      {loading && <PostSkeletonList count={3} />}
 
       {/* Error */}
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
-          <Inbox size={32} className="opacity-40" />
-          <p className="text-sm font-bold">Failed to load feed</p>
-          <p className="text-xs">{error}</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-14 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+            <Inbox size={28} className="text-red-500/70" />
+          </div>
+          <p className="text-sm font-bold text-foreground">Failed to load feed</p>
+          <p className="text-xs max-w-xs text-center">{error}</p>
           <button
             onClick={() => setTab(tab)}
-            className="mt-2 rounded-full bg-surface px-4 py-1.5 text-xs font-medium transition-colors hover:bg-border"
+            className="mt-2 flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 text-xs font-bold transition-all hover:bg-border active:scale-95"
           >
+            <RefreshCw size={14} />
             Retry
           </button>
         </div>
@@ -149,11 +184,13 @@ export default function Feed() {
 
       {/* Empty */}
       {!loading && !error && posts.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
-          <Inbox size={40} className="opacity-30" />
-          <p className="text-lg font-bold">No posts yet</p>
-          <p className="text-sm">
-            Follow communities or create your first post
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+            <Inbox size={28} className="text-accent" />
+          </div>
+          <p className="text-lg font-bold text-foreground">No posts yet</p>
+          <p className="text-sm text-center max-w-xs">
+            Follow communities or create your first post to get started
           </p>
         </div>
       )}

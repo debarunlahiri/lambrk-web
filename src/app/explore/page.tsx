@@ -194,6 +194,7 @@ export default function ExplorePage() {
                         <img
                           src={comm.iconImageUrl}
                           alt=""
+                          loading="lazy"
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -257,6 +258,7 @@ export default function ExplorePage() {
                     "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&q=80"
                   }
                   alt={cat.name}
+                  loading="lazy"
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -310,6 +312,7 @@ export default function ExplorePage() {
                       <img
                         src={comm.iconImageUrl}
                         alt=""
+                        loading="lazy"
                         className="h-full w-full object-cover"
                       />
                     ) : (
@@ -378,6 +381,7 @@ export default function ExplorePage() {
                     <img
                       src={comm.iconImageUrl}
                       alt=""
+                      loading="lazy"
                       className="h-full w-full object-cover"
                     />
                   ) : (

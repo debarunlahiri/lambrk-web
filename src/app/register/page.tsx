@@ -1,13 +1,53 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
-import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, User, Mail, Lock, ArrowRight } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, isAuthenticated, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace("/");
+    }
+  }, [isAuthenticated, router]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[80vh] flex-col items-center justify-center gap-4 py-12">
+        <Loader2 size={32} className="animate-spin text-muted" />
+        <p className="text-sm text-muted">Loading...</p>
+      </div>
+    );
+  }
+
+  if (isAuthenticated) {
+    return (
+      <div className="flex min-h-[80vh] flex-col items-center justify-center gap-4 py-12">
+        <Loader2 size={32} className="animate-spin text-accent" />
+        <p className="text-sm text-muted">Redirecting...</p>
+      </div>
+    );
+  }
+
+  return <RegisterForm register={register} />;
+}
+
+function RegisterForm({
+  register,
+}: {
+  register: (data: {
+    username: string;
+    email: string;
+    password: string;
+    displayName: string;
+  }) => Promise<void>;
+}) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -23,7 +63,6 @@ export default function RegisterPage() {
     setLoading(true);
     try {
       await register({ username, email, password, displayName });
-      window.location.href = "/";
     } catch (err: unknown) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -41,91 +80,97 @@ export default function RegisterPage() {
   };
 
   const inputClass = (field: string) =>
-    `rounded-2xl bg-card px-4 py-3 text-sm ring-1 outline-none transition-all placeholder:text-muted/60 focus:ring-2 focus:ring-accent/30 ${
+    `w-full rounded-2xl bg-card py-3.5 pl-11 pr-4 text-sm ring-1 outline-none transition-all placeholder:text-muted/50 focus:ring-2 focus:ring-accent/30 hover:ring-accent/20 ${
       fieldErrors[field] ? "ring-red-500 focus:ring-red-500/30" : "ring-border"
     }`;
 
   return (
-    <div className="flex flex-col items-center justify-center py-12">
+    <div className="flex min-h-[80vh] flex-col items-center justify-center py-12">
       <div className="w-full max-w-sm">
-        <Link
-          href="/"
-          className="mb-6 inline-flex items-center gap-2 text-sm text-muted transition-colors hover:text-foreground"
-        >
-          <ArrowLeft size={16} />
-          Back to feed
-        </Link>
-
-        <h1 className="mb-2 text-3xl font-black tracking-tight">
-          Join <span className="gradient-text">lambrk</span>
-        </h1>
-        <p className="mb-8 text-sm text-muted">
-          Create an account to start sharing
-        </p>
+        <div className="mb-8 text-center">
+          <h1 className="mb-2 text-3xl font-black tracking-tight">
+            Join <span className="gradient-text">lambrk</span>
+          </h1>
+          <p className="text-sm text-muted">
+            Create an account to start sharing
+          </p>
+        </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {error && (
-            <div className="flex items-start gap-2 rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500">
+            <div className="flex items-start gap-3 rounded-2xl bg-red-500/10 px-4 py-3.5 text-sm text-red-500 animate-in fade-in slide-in-from-top-2">
               <AlertCircle size={16} className="mt-0.5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Display Name</label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              required
-              placeholder="John Doe"
-              className={inputClass("displayName")}
-            />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold">Display Name</label>
+            <div className="relative">
+              <User size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                required
+                placeholder="John Doe"
+                className={inputClass("displayName")}
+              />
+            </div>
             {fieldErrors.displayName && (
               <p className="text-xs text-red-500">{fieldErrors.displayName}</p>
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Username</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              placeholder="johndoe"
-              className={inputClass("username")}
-            />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold">Username</label>
+            <div className="relative">
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                placeholder="johndoe"
+                className={inputClass("username")}
+              />
+            </div>
             {fieldErrors.username && (
               <p className="text-xs text-red-500">{fieldErrors.username}</p>
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="john@example.com"
-              className={inputClass("email")}
-            />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold">Email</label>
+            <div className="relative">
+              <Mail size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="john@example.com"
+                className={inputClass("email")}
+              />
+            </div>
             {fieldErrors.email && (
               <p className="text-xs text-red-500">{fieldErrors.email}</p>
             )}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              className={inputClass("password")}
-            />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold">Password</label>
+            <div className="relative">
+              <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                className={inputClass("password")}
+              />
+            </div>
             {fieldErrors.password && (
               <p className="text-xs text-red-500">{fieldErrors.password}</p>
             )}
@@ -134,18 +179,25 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-2 flex h-12 items-center justify-center rounded-full bg-foreground text-sm font-bold text-background transition-opacity hover:opacity-80 disabled:opacity-50"
+            className="mt-2 flex h-13 items-center justify-center gap-2 rounded-full bg-foreground text-sm font-bold text-background transition-all hover:opacity-80 disabled:opacity-50 shadow-lg shadow-foreground/10"
           >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : "Create Account"}
+            {loading ? (
+              <Loader2 size={18} className="animate-spin" />
+            ) : (
+              <>
+                Create Account
+                <ArrowRight size={16} />
+              </>
+            )}
           </button>
-        </form>
 
-        <p className="mt-6 text-center text-sm text-muted">
-          Already have an account?{" "}
-          <Link href="/login" className="font-bold text-accent hover:underline">
-            Sign in
-          </Link>
-        </p>
+          <p className="text-center text-sm text-muted">
+            Already have an account?{" "}
+            <Link href="/login" className="font-bold text-accent hover:underline underline-offset-4">
+              Sign in
+            </Link>
+          </p>
+        </form>
       </div>
     </div>
   );

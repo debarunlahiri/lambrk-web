@@ -9,6 +9,8 @@
   --accent-2: #a855f7;
   --surface: #f0eeeb;
   --border: #e6e3df;
+  --error: #ef4444;
+  --success: #22c55e;
 }
 
 @theme inline {
@@ -20,6 +22,8 @@
   --color-accent-2: var(--accent-2);
   --color-surface: var(--surface);
   --color-border: var(--border);
+  --color-error: var(--error);
+  --color-success: var(--success);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -34,6 +38,8 @@
     --accent-2: #c084fc;
     --surface: #1c1c1f;
     --border: #27272a;
+    --error: #f87171;
+    --success: #4ade80;
   }
 }
 
@@ -41,6 +47,27 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
 
 .scrollbar-hide::-webkit-scrollbar {
@@ -72,4 +99,44 @@ body {
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+}
+
+/* Smooth page transitions */
+.page-transition-enter {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-transition-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms ease-out, transform 300ms ease-out;
+}
+
+/* Better focus rings */
+*:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Button active states */
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* Input autofill styling */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px var(--card) inset;
+  -webkit-text-fill-color: var(--foreground);
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Selection color */
+::selection {
+  background: var(--accent);
+  color: white;
 }

@@ -168,6 +168,7 @@ export default function DiscoverPage() {
                     <img
                       src={comm.iconImageUrl}
                       alt=""
+                      loading="lazy"
                       className="h-full w-full object-cover"
                     />
                   ) : (

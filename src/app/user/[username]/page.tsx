@@ -7,8 +7,10 @@ import {
   ArrowLeft,
   Calendar,
   Flame,
+  Globe,
   Loader2,
   Image as ImageIcon,
+  MapPin,
   MessageCircle,
   UserPlus,
   UserCheck,
@@ -164,13 +166,20 @@ export default function UserProfilePage() {
       </div>
 
       {/* Banner & Avatar */}
-      <div className="relative">
-        <div className="aspect-[3/1] w-full overflow-hidden rounded-3xl bg-gradient-to-br from-accent/20 to-accent-2/20">
-          <img
-            src="https://images.unsplash.com/photo-1557683316-973673baf926?w=1200&q=80"
-            alt="Banner"
-            className="h-full w-full object-cover"
-          />
+      <div className="relative -mx-4 md:-mx-0">
+        <div
+          className="aspect-[3/1] w-full overflow-hidden rounded-3xl bg-gradient-to-br from-accent/20 to-accent-2/20"
+          style={
+            profile.headerImageUrl
+              ? { backgroundImage: `url(${profile.headerImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+              : undefined
+          }
+        >
+          {!profile.headerImageUrl && (
+            <div className="flex h-full w-full items-center justify-center">
+              <Globe size={32} className="text-muted/20" />
+            </div>
+          )}
         </div>
         <div className="absolute -bottom-10 left-6 z-10">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-2xl font-black text-white shadow-lg ring-4 ring-background overflow-hidden">
@@ -178,6 +187,7 @@ export default function UserProfilePage() {
               <img
                 src={profile.avatarUrl}
                 alt=""
+                loading="lazy"
                 className="h-full w-full object-cover"
               />
             ) : (
@@ -206,6 +216,26 @@ export default function UserProfilePage() {
         {profile.bio && (
           <p className="mt-3 text-[15px] leading-relaxed">{profile.bio}</p>
         )}
+
+        <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted">
+          {profile.location && (
+            <span className="flex items-center gap-1">
+              <MapPin size={15} />
+              {profile.location}
+            </span>
+          )}
+          {profile.website && (
+            <a
+              href={profile.website.startsWith("http") ? profile.website : `https://${profile.website}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-accent hover:underline"
+            >
+              <Globe size={15} />
+              {profile.website.replace(/^https?:\/\//, "")}
+            </a>
+          )}
+        </div>
 
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-muted">
           {profile.karma !== undefined && (
@@ -297,11 +327,13 @@ export default function UserProfilePage() {
                         muted
                         loop
                         playsInline
+                        preload="none"
                       />
                     ) : (
                       <img
                         src={m.url}
                         alt=""
+                        loading="lazy"
                         className="h-full w-full object-cover"
                       />
                     )}

@@ -2,33 +2,32 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
   Search,
   Loader2,
   TrendingUp,
   Hash,
   Users,
-  MessageCircle,
-  Clock,
   FileText,
   X,
   Globe,
+  RefreshCw,
 } from "lucide-react";
 import {
   searchAll,
   globalSearchPosts,
   searchCommunitiesApi,
   searchUsers,
-  getSearchSuggestions,
   getTrendingSearches,
   type SearchResponse,
   type SearchUser,
-  type FeedPost,
   type Community,
 } from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
 import PostCard from "@/components/PostCard";
+import BackButton from "@/components/BackButton";
+import { SearchSkeleton, PostSkeletonList, UserCardSkeleton, CommunityCardSkeleton } from "@/components/Skeleton";
 
 type SearchTab = "all" | "posts" | "communities" | "users";
 
@@ -49,14 +48,15 @@ function UserCard({ user }: { user: SearchUser }) {
 
   return (
     <Link
-      href={`/profile`}
-      className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-all hover:shadow-md"
+      href={`/user/${user.username}`}
+      className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-all hover:shadow-md hover:ring-accent/20"
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden shadow-sm">
         {user.avatarUrl ? (
           <img
             src={user.avatarUrl}
             alt=""
+            loading="lazy"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -88,13 +88,14 @@ function CommunityCard({ community }: { community: Community }) {
   return (
     <Link
       href={`/community/${community.name}`}
-      className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-all hover:shadow-md"
+      className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-all hover:shadow-md hover:ring-accent/20"
     >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden shadow-sm">
         {community.iconImageUrl ? (
           <img
             src={community.iconImageUrl}
             alt=""
+            loading="lazy"
             className="h-full w-full object-cover"
           />
         ) : (
@@ -114,6 +115,7 @@ function CommunityCard({ community }: { community: Community }) {
 }
 
 export default function SearchPage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<SearchTab>("all");
   const [results, setResults] = useState<SearchResponse | null>(null);
@@ -121,7 +123,7 @@ export default function SearchPage() {
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
 
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SearchUser[]>([]);
   const [suggLoading, setSuggLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
@@ -194,8 +196,8 @@ export default function SearchPage() {
 
     suggTimeoutRef.current = setTimeout(async () => {
       try {
-        const suggs = await getSearchSuggestions(value.trim());
-        setSuggestions(suggs);
+        const data = await searchUsers(value.trim(), 0, 5);
+        setSuggestions(data.users || []);
       } catch {
         setSuggestions([]);
       } finally {
@@ -204,16 +206,14 @@ export default function SearchPage() {
     }, 250);
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setQuery(suggestion);
+  const handleSuggestionClick = (user: SearchUser) => {
     setShowSuggestions(false);
-    doSearch(suggestion);
+    router.push(`/user/${user.username}`);
   };
 
   const handleTabChange = (newTab: SearchTab) => {
     setTab(newTab);
     if (searched && query.trim()) {
-      // Re-search with new tab
       setLoading(true);
       setError("");
       let fn: typeof searchAll;
@@ -249,17 +249,12 @@ export default function SearchPage() {
   return (
     <div className="flex flex-col gap-6 pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-4 bg-background/80 px-4 py-3 backdrop-blur-xl md:-mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
+      <div className="sticky top-0 z-10 -mx-4 bg-background/85 px-4 py-3 backdrop-blur-2xl md:-mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
         <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="flex h-10 w-10 items-center justify-center rounded-full transition-all hover:bg-surface active:scale-95"
-          >
-            <ArrowLeft size={20} />
-          </Link>
+          <BackButton fallback="/" label="" />
 
           <div className="relative flex-1">
-            <div className="flex items-center gap-2 rounded-2xl bg-card px-3 py-2 shadow-sm ring-1 ring-border focus-within:ring-2 focus-within:ring-accent/40 transition-all">
+            <div className="flex items-center gap-2 rounded-2xl bg-card px-3 py-2.5 shadow-sm ring-1 ring-border focus-within:ring-2 focus-within:ring-accent/40 transition-all">
               <Search size={18} className="text-muted shrink-0" />
               <input
                 ref={inputRef}
@@ -270,8 +265,8 @@ export default function SearchPage() {
                 onFocus={() => {
                   if (suggestions.length > 0) setShowSuggestions(true);
                 }}
-                placeholder="Search posts, communities, users..."
-                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted/60"
+                placeholder="Search users, posts, communities..."
+                className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted/50"
                 autoFocus
               />
               {query && (
@@ -282,22 +277,22 @@ export default function SearchPage() {
                     setShowSuggestions(false);
                     inputRef.current?.focus();
                   }}
-                  className="flex h-6 w-6 items-center justify-center rounded-full bg-surface text-muted hover:bg-border"
+                  className="flex h-7 w-7 items-center justify-center rounded-full bg-surface text-muted hover:bg-border hover:text-foreground transition-colors"
                 >
-                  <X size={12} />
+                  <X size={14} />
                 </button>
               )}
               {!query && (
                 <button
                   onClick={() => doSearch(query)}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-background transition-opacity hover:opacity-80"
+                  className="flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background transition-all hover:opacity-80 shadow-sm"
                 >
                   <Search size={14} />
                 </button>
               )}
             </div>
 
-            {/* Suggestions dropdown */}
+            {/* User search dropdown */}
             {showSuggestions && (suggestions.length > 0 || suggLoading) && (
               <>
                 <div
@@ -306,21 +301,52 @@ export default function SearchPage() {
                 />
                 <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border animate-in fade-in slide-in-from-top-2 duration-150">
                   {suggLoading && (
-                    <div className="flex items-center justify-center py-4">
+                    <div className="flex items-center justify-center py-5">
                       <Loader2 size={18} className="animate-spin text-muted" />
                     </div>
                   )}
                   {!suggLoading &&
-                    suggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSuggestionClick(s)}
-                        className="flex w-full items-center gap-3 px-4 py-2.5 text-sm transition-colors hover:bg-surface text-left"
-                      >
-                        <Search size={14} className="text-muted shrink-0" />
-                        <span className="truncate">{s}</span>
-                      </button>
-                    ))}
+                    suggestions.map((user) => {
+                      const initials = user.displayName
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase() || "??";
+                      return (
+                        <button
+                          key={user.id}
+                          onClick={() => handleSuggestionClick(user)}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-surface text-left"
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-[11px] font-bold text-white overflow-hidden">
+                            {user.avatarUrl ? (
+                              <img src={user.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
+                            ) : (
+                              initials
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-bold truncate text-sm">{user.displayName}</p>
+                              {user.isVerified && (
+                                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-accent text-[7px] font-bold text-white">✓</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted">@{user.username}</p>
+                          </div>
+                          <span className="text-xs text-muted shrink-0">
+                            {user.karma > 0 && <span>{user.karma} karma</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  {!suggLoading && suggestions.length === 0 && (
+                    <div className="flex items-center justify-center gap-2 py-5 text-sm text-muted">
+                      <Search size={14} />
+                      No users found
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -363,22 +389,21 @@ export default function SearchPage() {
       )}
 
       {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-16 text-muted">
-          <Loader2 size={32} className="animate-spin" />
-        </div>
-      )}
+      {loading && <SearchSkeleton />}
 
       {/* Error */}
       {!loading && error && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
-          <Search size={32} className="opacity-40" />
-          <p className="text-sm font-bold">Search failed</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+            <Search size={24} className="text-red-500/70" />
+          </div>
+          <p className="text-sm font-bold text-foreground">Search failed</p>
           <p className="text-xs">{error}</p>
           <button
             onClick={() => doSearch(query)}
-            className="mt-2 rounded-full bg-surface px-4 py-1.5 text-xs font-medium transition-colors hover:bg-border"
+            className="mt-2 flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 text-xs font-bold transition-all hover:bg-border active:scale-95"
           >
+            <RefreshCw size={14} />
             Retry
           </button>
         </div>
@@ -386,9 +411,11 @@ export default function SearchPage() {
 
       {/* Empty results */}
       {!loading && !error && searched && posts.length === 0 && communities.length === 0 && users.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
-          <Search size={40} className="opacity-30" />
-          <p className="text-lg font-bold">No results found</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+            <Search size={24} className="text-accent" />
+          </div>
+          <p className="text-lg font-bold text-foreground">No results found</p>
           <p className="text-sm">Try a different search term</p>
         </div>
       )}
@@ -429,8 +456,9 @@ export default function SearchPage() {
           </div>
 
           {trendingLoading && (
-            <div className="flex items-center justify-center py-12 text-muted">
-              <Loader2 size={28} className="animate-spin" />
+            <div className="flex flex-col gap-3">
+              <CommunityCardSkeleton />
+              <PostSkeletonList count={2} />
             </div>
           )}
 
@@ -454,31 +482,41 @@ export default function SearchPage() {
           )}
 
           {!trendingLoading && trendingPosts.length === 0 && trendingComms.length === 0 && (
-            <div className="flex flex-col items-center justify-center rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
-              <TrendingUp size={32} className="opacity-40" />
-              <p className="text-sm font-bold">No trending searches</p>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+                <TrendingUp size={24} className="text-accent" />
+              </div>
+              <p className="text-sm font-bold text-foreground">No trending searches</p>
               <p className="text-xs">Check back later</p>
             </div>
           )}
 
           {/* Search tips */}
-          <div className="flex flex-col gap-3 rounded-3xl bg-card p-5 shadow-sm ring-1 ring-border">
+          <div className="flex flex-col gap-4 rounded-3xl bg-card p-6 shadow-sm ring-1 ring-border">
             <h3 className="text-sm font-bold text-muted">Search Tips</h3>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <FileText size={14} />
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-3 text-sm text-muted">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface">
+                  <FileText size={14} />
+                </div>
                 <span>Search posts by keywords, titles, or content</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Hash size={14} />
+              <div className="flex items-center gap-3 text-sm text-muted">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface">
+                  <Hash size={14} />
+                </div>
                 <span>Find communities by name or topic</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Users size={14} />
+              <div className="flex items-center gap-3 text-sm text-muted">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface">
+                  <Users size={14} />
+                </div>
                 <span>Discover users by username or display name</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-muted">
-                <Globe size={14} />
+              <div className="flex items-center gap-3 text-sm text-muted">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-surface">
+                  <Globe size={14} />
+                </div>
                 <span>Use &quot;All&quot; to search across everything at once</span>
               </div>
             </div>

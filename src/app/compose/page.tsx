@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import {
   uploadFile,
   createPost,
@@ -12,7 +13,6 @@ import {
   type Community,
 } from "@/lib/api";
 import {
-  ArrowLeft,
   Image as ImageIcon,
   Film,
   X,
@@ -23,13 +23,48 @@ import {
   Globe,
   ChevronDown,
   Hash,
+  Upload,
+  AlertTriangle,
 } from "lucide-react";
+import BackButton from "@/components/BackButton";
 
 const MAX_CHARS = 500;
 
+interface PendingMedia {
+  type: "image" | "video";
+  file: File;
+  previewUrl: string;
+}
+
+interface UploadProgress {
+  index: number;
+  fileName: string;
+  progress: number;
+  status: "pending" | "uploading" | "done" | "error";
+  url?: string;
+  error?: string;
+}
+
 export default function ComposePage() {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { show: showToast, update: updateToast, dismiss: dismissToast } = useToast();
   const router = useRouter();
+
+  const [content, setContent] = useState("");
+  const [media, setMedia] = useState<PendingMedia[]>([]);
+  const [isFocused, setIsFocused] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingType, setPendingType] = useState<"image" | "video" | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [communityId, setCommunityId] = useState<string | null>(null);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [commLoading, setCommLoading] = useState(true);
+  const [showCommDropdown, setShowCommDropdown] = useState(false);
+
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState("");
+  const [uploads, setUploads] = useState<UploadProgress[]>([]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -37,31 +72,14 @@ export default function ComposePage() {
     }
   }, [isLoading, isAuthenticated, router]);
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-muted">
-        <Loader2 size={32} className="animate-spin" />
-      </div>
-    );
-  }
+  useEffect(() => {
+    getUserSubscriptions()
+      .then(setCommunities)
+      .catch(() => {})
+      .finally(() => setCommLoading(false));
+  }, []);
 
-  if (!isAuthenticated) return null;
-  const [content, setContent] = useState("");
-  const [media, setMedia] = useState<{ type: "image" | "video"; url: string }[]>([]);
-  const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState("");
-  const [isFocused, setIsFocused] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [pendingType, setPendingType] = useState<"image" | "video" | null>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const [communityId, setCommunityId] = useState<number | null>(null);
-  const [communities, setCommunities] = useState<Community[]>([]);
-  const [commLoading, setCommLoading] = useState(true);
-  const [showCommDropdown, setShowCommDropdown] = useState(false);
-
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState("");
+  const selectedCommunity = communities.find((c) => c.id === communityId);
 
   const avatarText = user?.displayName
     ? user.displayName
@@ -72,64 +90,13 @@ export default function ComposePage() {
         .toUpperCase()
     : "YO";
 
-  useEffect(() => {
-    getUserSubscriptions()
-      .then(setCommunities)
-      .catch(() => {})
-      .finally(() => setCommLoading(false));
-  }, []);
-
-  const selectedCommunity = communities.find((c) => Number(c.id) === communityId);
-
   const charCount = content.length;
   const charPercentRaw = (charCount / MAX_CHARS) * 100;
   const charPercent = Math.min(charPercentRaw, 100);
   const isOverLimit = charCount > MAX_CHARS;
   const remainingChars = MAX_CHARS - charCount;
   const canPublish =
-    !isOverLimit && (content.trim().length > 0 || media.length > 0) && !uploading && !submitting;
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !pendingType) return;
-    setUploading(true);
-    setUploadError("");
-    try {
-      const apiType = pendingType === "image" ? "POST_IMAGE" : "POST_VIDEO";
-      const uploaded = await uploadFile({
-        file,
-        type: apiType,
-        fileName: file.name,
-        description: "Post media",
-        isPublic: true,
-        isNSFW: false,
-      });
-      setMedia((prev) => [...prev, { type: pendingType, url: uploaded.fileUrl }]);
-    } catch (err: unknown) {
-      let message = "Upload failed. Please try again.";
-      if (err instanceof ApiError) {
-        message = err.message;
-      } else if (err instanceof Error) {
-        message = err.message;
-      }
-      setUploadError(message);
-    } finally {
-      setUploading(false);
-      setPendingType(null);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-      }
-    }
-  };
-
-  const triggerUpload = (type: "image" | "video") => {
-    setPendingType(type);
-    fileInputRef.current?.click();
-  };
-
-  const removeMedia = (index: number) => {
-    setMedia((prev) => prev.filter((_, i) => i !== index));
-  };
+    !isOverLimit && (content.trim().length > 0 || media.length > 0) && !publishing;
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
@@ -142,17 +109,118 @@ export default function ComposePage() {
     el.style.height = `${Math.min(el.scrollHeight, 400)}px`;
   }, [content]);
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !pendingType) return;
+
+    const isGif = file.type === "image/gif";
+    if ((pendingType === "video" || isGif) && media.some((m) => m.type === "video" || m.file.type === "image/gif")) return;
+
+    const previewUrl = URL.createObjectURL(file);
+    setMedia((prev) => [...prev, { type: pendingType, file, previewUrl }]);
+    setPendingType(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const triggerUpload = (type: "image" | "video") => {
+    if (type === "video" && hasSingleOnly) return;
+    setPendingType(type);
+    fileInputRef.current?.click();
+  };
+
+  const hasSingleOnly = media.some((m) => m.type === "video" || m.file.type === "image/gif");
+
+  const removeMedia = (index: number) => {
+    setMedia((prev) => {
+      const item = prev[index];
+      if (item) URL.revokeObjectURL(item.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const handlePublish = async () => {
     if (!canPublish) return;
-    setSubmitting(true);
-    setSubmitError("");
+    setPublishing(true);
+    setPublishError("");
+
+    const toastId = showToast(
+      media.length > 0 ? "Uploading media..." : "Publishing post...",
+      "loading"
+    );
 
     try {
+      const uploadedFileIds: string[] = [];
+      const uploadResults: { type: "image" | "video"; url: string }[] = [];
+
+      if (media.length > 0) {
+        const progressItems: UploadProgress[] = media.map((m, i) => ({
+          index: i,
+          fileName: m.file.name,
+          progress: 0,
+          status: "pending" as const,
+        }));
+        setUploads(progressItems);
+
+        for (let i = 0; i < media.length; i++) {
+          setUploads((prev) =>
+            prev.map((p) =>
+              p.index === i ? { ...p, status: "uploading" as const, progress: 20 } : p
+            )
+          );
+
+          try {
+            const apiType: "POST_IMAGE" | "POST_VIDEO" = media[i].type === "image" ? "POST_IMAGE" : "POST_VIDEO";
+            const uploaded = await uploadFile({
+              file: media[i].file,
+              type: apiType,
+              fileName: media[i].file.name,
+              description: "Post media",
+              isPublic: true,
+              isNSFW: false,
+            });
+
+            setUploads((prev) =>
+              prev.map((p) =>
+                p.index === i
+                  ? { ...p, status: "done" as const, progress: 100, url: uploaded.fileUrl }
+                  : p
+              )
+            );
+
+            uploadedFileIds.push(uploaded.fileId);
+            uploadResults.push({
+              type: media[i].type,
+              url: uploaded.fileUrl,
+            });
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : "Upload failed";
+            setUploads((prev) =>
+              prev.map((p) =>
+                p.index === i
+                  ? { ...p, status: "error" as const, error: message }
+                  : p
+              )
+            );
+            throw new Error(message);
+          }
+        }
+      }
+
+      updateToast(toastId, "Creating post...", "loading");
       const post = await createPost({
         content: content.trim(),
-        postType: "TEXT",
+        postType: uploadedFileIds.length > 0 ? "IMAGE" : "TEXT",
         communityId: communityId,
+        mediaIds: uploadedFileIds.length > 0 ? uploadedFileIds : undefined,
       });
+
+      // Clean up preview URLs
+      media.forEach((m) => URL.revokeObjectURL(m.previewUrl));
+
+      updateToast(toastId, "Post published!", "success");
 
       if (communityId && selectedCommunity) {
         router.push(`/community/${selectedCommunity.name}`);
@@ -160,29 +228,48 @@ export default function ComposePage() {
         router.push(`/post/${post.id}`);
       }
     } catch (err: unknown) {
-      if (err instanceof ApiError) {
-        setSubmitError(err.message);
-      } else if (err instanceof Error) {
-        setSubmitError(err.message);
-      } else {
-        setSubmitError("Failed to publish. Please try again.");
-      }
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Failed to publish. Please try again.";
+      setPublishError(message);
+      updateToast(toastId, message, "error");
     } finally {
-      setSubmitting(false);
+      setPublishing(false);
     }
   };
+
+  const cancelPublishing = () => {
+    setPublishing(false);
+    setUploads([]);
+    setPublishError("");
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-muted">
+        <Loader2 size={32} className="animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    router.replace("/login");
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 size={32} className="animate-spin text-muted" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl">
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-4 mb-4 bg-background/80 px-4 py-3 backdrop-blur-xl md:-mx-0 md:mb-6 md:bg-transparent md:px-0 md:backdrop-blur-none">
+      <div className="sticky top-0 z-10 -mx-4 mb-4 bg-background/85 px-4 py-3 backdrop-blur-2xl md:-mx-0 md:mb-6 md:bg-transparent md:px-0 md:backdrop-blur-none">
         <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="flex h-10 w-10 items-center justify-center rounded-full transition-all hover:bg-surface active:scale-95"
-          >
-            <ArrowLeft size={20} />
-          </Link>
+          <BackButton fallback="/" />
 
           <div className="flex items-center gap-3">
             {/* Character count */}
@@ -236,14 +323,8 @@ export default function ComposePage() {
               disabled={!canPublish}
               className="flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-bold text-background transition-all hover:opacity-80 active:scale-95 disabled:opacity-30 disabled:active:scale-100"
             >
-              {submitting ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Send size={16} />
-              )}
-              <span className="hidden sm:inline">
-                {submitting ? "Publishing..." : "Publish"}
-              </span>
+              <Send size={16} />
+              <span className="hidden sm:inline">Publish</span>
             </button>
           </div>
         </div>
@@ -286,19 +367,11 @@ export default function ComposePage() {
                 autoFocus
               />
 
-              {/* Upload error */}
-              {uploadError && (
+              {/* Publish error */}
+              {publishError && (
                 <div className="flex items-center gap-2 rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500 animate-in fade-in slide-in-from-top-1">
-                  <X size={16} />
-                  {uploadError}
-                </div>
-              )}
-
-              {/* Submit error */}
-              {submitError && (
-                <div className="flex items-center gap-2 rounded-2xl bg-red-500/10 px-4 py-3 text-sm text-red-500 animate-in fade-in slide-in-from-top-1">
-                  <X size={16} />
-                  {submitError}
+                  <AlertTriangle size={16} />
+                  {publishError}
                 </div>
               )}
 
@@ -326,22 +399,25 @@ export default function ComposePage() {
                     >
                       {item.type === "image" ? (
                         <img
-                          src={item.url}
-                          alt=""
+                          src={item.previewUrl}
+                          alt={item.file.name}
+                          loading="lazy"
                           className="h-full w-full object-cover"
                         />
                       ) : (
                         <video
-                          src={item.url}
+                          src={item.previewUrl}
                           className="h-full w-full object-cover"
                           muted
                           loop
                           playsInline
+                          preload="none"
                         />
                       )}
                       <button
                         onClick={() => removeMedia(index)}
-                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-all hover:bg-black/70 hover:scale-110 active:scale-95"
+                        disabled={publishing}
+                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-md transition-all hover:bg-black/70 hover:scale-110 active:scale-95 disabled:opacity-30"
                       >
                         <X size={16} />
                       </button>
@@ -372,35 +448,24 @@ export default function ComposePage() {
 
             <button
               onClick={() => triggerUpload("image")}
-              disabled={uploading}
+              disabled={publishing}
               className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-all hover:bg-accent/10 active:scale-90 disabled:opacity-50"
               title="Add image"
             >
-              {uploading && pendingType === "image" ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <ImageIcon size={20} />
-              )}
+              <ImageIcon size={20} />
             </button>
 
             <button
               onClick={() => triggerUpload("video")}
-              disabled={uploading}
-              className="flex h-10 w-10 items-center justify-center rounded-full text-accent transition-all hover:bg-accent/10 active:scale-90 disabled:opacity-50"
-              title="Add video"
+              disabled={publishing || hasSingleOnly}
+              className={`flex h-10 w-10 items-center justify-center rounded-full transition-all active:scale-90 ${
+                hasSingleOnly
+                  ? "text-muted/40 cursor-not-allowed"
+                  : "text-accent hover:bg-accent/10 disabled:opacity-50"
+              }`}
+              title={hasSingleOnly ? "Only one video or GIF allowed" : "Add video"}
             >
-              {uploading && pendingType === "video" ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <Film size={20} />
-              )}
-            </button>
-
-            <button
-              className="flex h-10 w-10 items-center justify-center rounded-full text-accent-2 transition-all hover:bg-accent-2/10 active:scale-90"
-              title="AI assist"
-            >
-              <Sparkles size={20} />
+              <Film size={20} />
             </button>
 
             <div className="mx-1 h-5 w-px bg-border" />
@@ -409,7 +474,8 @@ export default function ComposePage() {
             <div className="relative">
               <button
                 onClick={() => setShowCommDropdown(!showCommDropdown)}
-                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm transition-all hover:bg-surface/80 active:scale-95"
+                disabled={publishing}
+                className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm transition-all hover:bg-surface/80 active:scale-95 disabled:opacity-50"
               >
                 {selectedCommunity ? (
                   <Hash size={16} className="text-accent" />
@@ -456,11 +522,11 @@ export default function ComposePage() {
                         <button
                           key={c.id}
                           onClick={() => {
-                            setCommunityId(Number(c.id));
+                            setCommunityId(c.id);
                             setShowCommDropdown(false);
                           }}
                           className={`flex w-full items-center gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-surface ${
-                            Number(c.id) === communityId ? "bg-surface" : ""
+                            c.id === communityId ? "bg-surface" : ""
                           }`}
                         >
                           <Hash size={16} className="text-muted" />
@@ -487,25 +553,71 @@ export default function ComposePage() {
             disabled={!canPublish}
             className="flex h-10 items-center gap-2 rounded-full bg-foreground px-5 text-sm font-bold text-background transition-all hover:opacity-80 active:scale-95 disabled:opacity-30 md:hidden"
           >
-            {submitting ? (
-              <Loader2 size={16} className="animate-spin" />
-            ) : (
-              <Send size={16} />
-            )}
+            <Send size={16} />
             Publish
           </button>
         </div>
       </div>
 
-      {/* Tips footer */}
-      <div className="mt-6 flex items-center justify-center gap-4 text-xs text-muted">
-        <span className="flex items-center gap-1">
-          <Sparkles size={12} className="text-accent-2" />
-          Press Enter to add a new line
-        </span>
-        <span className="hidden sm:inline">·</span>
-        <span className="hidden sm:inline">Supports images & videos</span>
-      </div>
+      {/* Publishing overlay */}
+      {publishing && (
+        <div className="fixed inset-x-4 bottom-6 z-50 mx-auto max-w-sm rounded-3xl bg-card p-5 shadow-2xl ring-1 ring-border animate-in slide-in-from-bottom-4 fade-in duration-200">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Upload size={18} className="text-accent" />
+              <h3 className="text-sm font-bold">Publishing...</h3>
+            </div>
+            <button
+              onClick={cancelPublishing}
+              className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-surface transition-colors"
+            >
+              <X size={14} />
+            </button>
+          </div>
+
+          {uploads.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {uploads.map((u) => (
+                <div key={u.index} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs truncate">{u.fileName}</p>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          u.status === "error" ? "bg-red-500" : "bg-accent"
+                        }`}
+                        style={{ width: `${u.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                  {u.status === "uploading" && (
+                    <Loader2 size={14} className="animate-spin text-muted shrink-0" />
+                  )}
+                  {u.status === "done" && (
+                    <span className="text-xs text-green-500 shrink-0">Done</span>
+                  )}
+                  {u.status === "error" && (
+                    <span className="text-xs text-red-500 shrink-0">Failed</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!uploads.length && (
+            <div className="flex items-center gap-2 mb-3 text-sm text-muted">
+              <Loader2 size={14} className="animate-spin" />
+              <span>Creating post...</span>
+            </div>
+          )}
+
+          <p className="text-xs text-muted">
+            {uploads.some((u) => u.status === "error")
+              ? "Some uploads failed. Please try again."
+              : "Please wait while we publish your post."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -235,15 +235,18 @@ export default function SettingsPage() {
 
       {/* Account info */}
       <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-border">
-        <div className="border-b border-border px-4 py-3">
-          <p className="text-xs font-bold text-muted uppercase tracking-wide">
-            Account
-          </p>
-        </div>
+        <div
+          className="h-16 w-full bg-gradient-to-br from-accent/30 to-accent-2/30"
+          style={
+            user?.headerImageUrl
+              ? { backgroundImage: `url(${user.headerImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }
+              : undefined
+          }
+        />
         <div className="flex items-center gap-4 px-4 py-4">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden ring-2 ring-card">
             {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+              <img src={user.avatarUrl} alt="" loading="lazy" className="h-full w-full object-cover" />
             ) : (
               user?.displayName
                 ?.split(" ")
@@ -258,7 +261,7 @@ export default function SettingsPage() {
             <p className="text-xs text-muted">@{user?.username || "username"}</p>
           </div>
           <Link
-            href="/profile"
+            href="/settings/edit-profile"
             className="rounded-full bg-surface px-3 py-1.5 text-xs font-medium transition-colors hover:bg-border"
           >
             Edit Profile

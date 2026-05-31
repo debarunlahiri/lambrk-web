@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft,
   Image as ImageIcon,
   Film,
   Upload,
@@ -19,8 +18,11 @@ import {
   UserCircle,
   AlertTriangle,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import BackButton from "@/components/BackButton";
+import { StatsSkeleton, FileGridSkeleton } from "@/components/Skeleton";
 import {
   listUserFiles,
   listFilesByType,
@@ -71,7 +73,7 @@ export default function FilesPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<ApiFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -149,7 +151,7 @@ export default function FilesPage() {
     try {
       const mimeType = file.type;
       const isVideo = mimeType.startsWith("video/");
-      const type = isVideo ? "POST_VIDEO" : mimeType.startsWith("image/") ? "POST_IMAGE" : "POST_IMAGE";
+      const type: "POST_IMAGE" | "POST_VIDEO" = isVideo ? "POST_VIDEO" : "POST_IMAGE";
       const uploaded = await uploadFile({
         file,
         type,
@@ -177,7 +179,7 @@ export default function FilesPage() {
     }
   };
 
-  const handleDelete = async (fileId: number) => {
+  const handleDelete = async (fileId: string) => {
     setDeleting(fileId);
     try {
       await deleteFile(fileId);
@@ -204,14 +206,9 @@ export default function FilesPage() {
   return (
     <div className="flex flex-col gap-6 pb-8">
       {/* Header */}
-      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between bg-background/80 px-4 py-3 backdrop-blur-xl md:-mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
+      <div className="sticky top-0 z-10 -mx-4 flex items-center justify-between bg-background/85 px-4 py-3 backdrop-blur-2xl md:-mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
         <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            className="flex h-10 w-10 items-center justify-center rounded-full transition-all hover:bg-surface active:scale-95"
-          >
-            <ArrowLeft size={20} />
-          </Link>
+          <BackButton fallback="/" />
           <div>
             <h1 className="text-lg font-bold">Files</h1>
             <p className="text-xs text-muted hidden sm:block">
@@ -263,16 +260,7 @@ export default function FilesPage() {
         </div>
       )}
 
-      {statsLoading && (
-        <div className="flex gap-2">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="h-16 flex-1 animate-pulse rounded-2xl bg-surface"
-            />
-          ))}
-        </div>
-      )}
+      {statsLoading && <StatsSkeleton />}
 
       {/* Search + Filter */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -340,30 +328,24 @@ export default function FilesPage() {
 
       {/* Error */}
       {error && !loading && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
-          <AlertTriangle size={32} className="opacity-40" />
-          <p className="text-sm font-bold">Failed to load files</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10">
+            <AlertTriangle size={24} className="text-red-500/70" />
+          </div>
+          <p className="text-sm font-bold text-foreground">Failed to load files</p>
           <p className="text-xs">{error}</p>
           <button
             onClick={() => fetchFiles()}
-            className="mt-2 rounded-full bg-surface px-4 py-1.5 text-xs font-medium transition-colors hover:bg-border"
+            className="mt-2 flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 text-xs font-bold transition-all hover:bg-border active:scale-95"
           >
+            <RefreshCw size={14} />
             Retry
           </button>
         </div>
       )}
 
       {/* Loading */}
-      {loading && !searchActive && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-          {[...Array(8)].map((_, i) => (
-            <div
-              key={i}
-              className="aspect-square animate-pulse rounded-2xl bg-surface"
-            />
-          ))}
-        </div>
-      )}
+      {loading && !searchActive && <FileGridSkeleton />}
 
       {/* Search loading */}
       {searchActive && searchLoading && (
@@ -374,13 +356,15 @@ export default function FilesPage() {
 
       {/* Empty */}
       {!loading && !searchActive && files.length === 0 && !error && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
-          <ImageIcon size={40} className="opacity-30" />
-          <p className="text-lg font-bold">No files yet</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-16 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+            <ImageIcon size={24} className="text-accent" />
+          </div>
+          <p className="text-lg font-bold text-foreground">No files yet</p>
           <p className="text-sm">Upload images or videos to get started</p>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="mt-3 flex items-center gap-2 rounded-full bg-foreground px-4 py-2 text-sm font-bold text-background transition-opacity hover:opacity-80"
+            className="mt-3 flex items-center gap-2 rounded-full bg-foreground px-5 py-2.5 text-sm font-bold text-background transition-all hover:opacity-80 shadow-lg shadow-foreground/10"
           >
             <Upload size={16} />
             Upload
@@ -390,9 +374,11 @@ export default function FilesPage() {
 
       {/* Search empty */}
       {searchActive && !searchLoading && searchResults.length === 0 && (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
-          <Search size={32} className="opacity-40" />
-          <p className="text-sm font-bold">No results</p>
+        <div className="flex flex-col items-center justify-center gap-3 rounded-3xl bg-card py-12 text-muted ring-1 ring-border">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10">
+            <Search size={24} className="text-accent" />
+          </div>
+          <p className="text-sm font-bold text-foreground">No results</p>
           <p className="text-xs">Try a different search term</p>
         </div>
       )}
@@ -413,11 +399,13 @@ export default function FilesPage() {
                     src={file.fileUrl}
                     className="h-full w-full object-cover"
                     muted
+                    preload="none"
                   />
                 ) : (
                   <img
                     src={file.fileUrl}
                     alt={file.altText || file.originalFileName}
+                    loading="lazy"
                     className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 )}
@@ -486,11 +474,13 @@ export default function FilesPage() {
                     src={selectedFile.fileUrl}
                     className="h-full w-full object-cover"
                     controls
+                    preload="none"
                   />
                 ) : (
                   <img
                     src={selectedFile.fileUrl}
                     alt={selectedFile.originalFileName}
+                    loading="lazy"
                     className="h-full w-full object-cover"
                   />
                 )}

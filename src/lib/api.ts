@@ -5,6 +5,20 @@ function getToken(): string | null {
   return localStorage.getItem("lambrk_access_token");
 }
 
+// ─── Unauthorized handler for auto-refresh ───
+
+type UnauthorizedHandler = () => Promise<boolean>;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler) {
+  unauthorizedHandler = handler;
+}
+
+export function clearUnauthorizedHandler() {
+  unauthorizedHandler = null;
+}
+
 export interface AuthResponse {
   accessToken: string;
   refreshToken: string;
@@ -15,7 +29,10 @@ export interface AuthResponse {
     username: string;
     displayName: string;
     bio: string | null;
+    location: string | null;
+    website: string | null;
     avatarUrl: string | null;
+    headerImageUrl: string | null;
     isActive: boolean;
     isVerified: boolean;
     karma: number;
@@ -61,7 +78,7 @@ export class ApiError extends Error {
   }
 }
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit, retry = true): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -79,6 +96,15 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     });
 
     if (!res.ok) {
+      // Auto-refresh on 401 (but not for auth endpoints)
+      if (res.status === 401 && retry && unauthorizedHandler && !url.includes("/auth/")) {
+        const refreshed = await unauthorizedHandler();
+        if (refreshed) {
+          // Retry once with new token
+          return fetchJson<T>(url, init, false);
+        }
+      }
+
       const errBody = await res.json().catch(() => ({ status: res.status, detail: res.statusText })) as ApiErrorResponse;
       throw new ApiError(errBody);
     }
@@ -315,6 +341,8 @@ export async function createCommunity(data: {
   isRestricted: boolean;
   isOver18: boolean;
   categoryIds: string[];
+  iconImageUrl?: string;
+  headerImageUrl?: string;
 }): Promise<Community> {
   return fetchJson<Community>(`${API_BASE}/api/communities`, {
     method: "POST",
@@ -340,20 +368,29 @@ export async function getUserSubscriptions(): Promise<Community[]> {
 
 // ─── Files ───
 
+export type FileType =
+  | "POST_IMAGE"
+  | "POST_VIDEO"
+  | "AVATAR"
+  | "COMMUNITY_BANNER"
+  | "COMMUNITY_ICON"
+  | "PROFILE_IMAGE"
+  | "COVER_IMAGE";
+
 export interface ApiFile {
-  fileId: number;
+  fileId: string;
   fileName: string;
   originalFileName: string;
   fileUrl: string;
   thumbnailUrl: string | null;
-  type: string;
+  type: FileType;
   fileSize: number;
   mimeType: string;
-  description: string;
+  description: string | null;
   isPublic: boolean;
   isNSFW: boolean;
-  altText: string;
-  uploadedBy: number;
+  altText: string | null;
+  uploadedBy: string;
   uploadedAt: string;
   checksum: string;
 }
@@ -370,18 +407,18 @@ export interface PaginatedFiles {
   empty: boolean;
 }
 
-export async function uploadFile(data: {
-  file: File;
-  type: string;
+export async function uploadFiles(data: {
+  files: File[];
+  type: FileType;
   fileName?: string;
   description?: string;
   isPublic?: boolean;
   isNSFW?: boolean;
   altText?: string;
-}): Promise<ApiFile> {
+}): Promise<ApiFile[]> {
   const token = getToken();
   const formData = new FormData();
-  formData.append("file", data.file);
+  data.files.forEach((f) => formData.append("files", f));
   formData.append("type", data.type);
   if (data.fileName) formData.append("fileName", data.fileName);
   if (data.description) formData.append("description", data.description);
@@ -416,11 +453,35 @@ export async function uploadFile(data: {
   }
 }
 
-export async function getFile(fileId: number): Promise<ApiFile> {
+export async function uploadFile(data: {
+  file: File;
+  type: FileType;
+  fileName?: string;
+  description?: string;
+  isPublic?: boolean;
+  isNSFW?: boolean;
+  altText?: string;
+}): Promise<ApiFile> {
+  const results = await uploadFiles({
+    files: [data.file],
+    type: data.type,
+    fileName: data.fileName,
+    description: data.description,
+    isPublic: data.isPublic,
+    isNSFW: data.isNSFW,
+    altText: data.altText,
+  });
+  if (!results.length) {
+    throw new ApiError({ status: 500, detail: "Upload succeeded but no file metadata was returned." });
+  }
+  return results[0];
+}
+
+export async function getFile(fileId: string): Promise<ApiFile> {
   return fetchJson<ApiFile>(`${API_BASE}/api/files/${fileId}`);
 }
 
-export async function getFileContent(fileId: number): Promise<Blob> {
+export async function getFileContent(fileId: string): Promise<Blob> {
   const token = getToken();
   const headers: Record<string, string> = {};
   if (token) {
@@ -446,14 +507,14 @@ export async function listPublicFiles(page = 0, size = 20): Promise<PaginatedFil
   return fetchJson<PaginatedFiles>(`${API_BASE}/api/files/public?page=${page}&size=${size}`);
 }
 
-export async function deleteFile(fileId: number): Promise<void> {
+export async function deleteFile(fileId: string): Promise<void> {
   await fetchJson<void>(`${API_BASE}/api/files/${fileId}`, {
     method: "DELETE",
   });
 }
 
 export interface FileUpdateRequest {
-  type?: string;
+  type?: FileType;
   fileName?: string;
   description?: string;
   isPublic?: boolean;
@@ -461,7 +522,7 @@ export interface FileUpdateRequest {
   altText?: string;
 }
 
-export async function updateFile(fileId: number, data: FileUpdateRequest): Promise<ApiFile> {
+export async function updateFile(fileId: string, data: FileUpdateRequest): Promise<ApiFile> {
   return fetchJson<ApiFile>(`${API_BASE}/api/files/${fileId}`, {
     method: "PUT",
     body: JSON.stringify(data),
@@ -492,13 +553,14 @@ export async function getRecentFiles(limit = 10): Promise<ApiFile[]> {
 
 // ─── Feed ───
 
-export interface FeedPostFile {
-  fileId: number;
-  fileUrl: string;
+export interface PostMedia {
+  id: string;
+  url: string;
   thumbnailUrl: string | null;
   type: string;
   mimeType: string;
-  originalFileName: string;
+  fileSize?: number;
+  altText?: string | null;
 }
 
 export interface FeedPost {
@@ -549,7 +611,7 @@ export interface FeedPost {
     subscriberCount?: number;
     activeUserCount?: number;
   } | null;
-  files?: FeedPostFile[];
+  media?: PostMedia[];
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -637,7 +699,8 @@ export interface CreatePostRequest {
   flairCssClass?: string | null;
   isSpoiler?: boolean;
   isOver18?: boolean;
-  communityId?: number | null;
+  communityId?: string | null;
+  mediaIds?: string[];
 }
 
 export async function createPost(data: CreatePostRequest): Promise<FeedPost> {
@@ -688,7 +751,7 @@ export async function searchPosts(query: string, page = 0, size = 20): Promise<P
   return fetchJson<PaginatedPosts>(`${API_BASE}/api/posts/search?query=${encodeURIComponent(query)}&page=${page}&size=${size}`);
 }
 
-export async function listStickiedPosts(communityId?: number): Promise<FeedPost[]> {
+export async function listStickiedPosts(communityId?: string): Promise<FeedPost[]> {
   const qs = communityId ? `?communityId=${communityId}` : "";
   return fetchJson<FeedPost[]>(`${API_BASE}/api/posts/stickied${qs}`);
 }
@@ -722,11 +785,11 @@ export async function getRecommendations(params?: {
   type?: string;
   limit?: number;
   excludeCommunities?: string[];
-  excludeUsers?: number[];
+  excludeUsers?: string[];
   includeNSFW?: boolean;
   includeOver18?: boolean;
-  contextCommunityId?: number | null;
-  contextPostId?: number | null;
+  contextCommunityId?: string | null;
+  contextPostId?: string | null;
 }): Promise<RecommendationResponse> {
   return fetchJson<RecommendationResponse>(`${API_BASE}/api/recommendations`, {
     method: "POST",
@@ -767,7 +830,7 @@ export async function getContextualRecommendations(
   params?: {
     type?: string;
     limit?: number;
-    contextCommunityId?: number;
+    contextCommunityId?: string;
     contextPostId?: string;
   }
 ): Promise<RecommendationResponse> {
@@ -908,7 +971,10 @@ export interface UserProfile {
   username: string;
   displayName: string;
   bio: string | null;
+  location: string | null;
+  website: string | null;
   avatarUrl: string | null;
+  headerImageUrl: string | null;
   isActive: boolean;
   isVerified: boolean;
   karma: number;
@@ -956,12 +1022,28 @@ export async function deleteUserAccount(userId: string): Promise<void> {
   });
 }
 
+export interface UpdateUserRequest {
+  displayName?: string;
+  bio?: string | null;
+  location?: string | null;
+  website?: string | null;
+  avatarUrl?: string | null;
+  headerImageUrl?: string | null;
+}
+
+export async function updateUserProfile(data: UpdateUserRequest): Promise<UserProfile> {
+  return fetchJson<UserProfile>(`${API_BASE}/api/users/me`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── Votes ───
 
 export interface VoteRequest {
   voteType: "LIKE" | "DISLIKE";
-  postId?: number | null;
-  commentId?: number | null;
+  postId?: string | null;
+  commentId?: string | null;
 }
 
 export async function votePost(postId: string, voteType: "LIKE" | "DISLIKE"): Promise<void> {

@@ -883,6 +883,13 @@ export interface SearchUser {
   karma: number;
   bio: string | null;
   createdAt: string;
+  isFollowing?: boolean;
+  following?: boolean;
+  followedByCurrentUser?: boolean;
+  isFriend?: boolean;
+  friends?: boolean;
+  friendshipStatus?: string | null;
+  friendStatus?: string | null;
 }
 
 export interface SearchResponse {
@@ -986,6 +993,13 @@ export interface UserProfile {
   karma: number;
   createdAt: string;
   updatedAt: string;
+  isFollowing?: boolean;
+  following?: boolean;
+  followedByCurrentUser?: boolean;
+  isFriend?: boolean;
+  friends?: boolean;
+  friendshipStatus?: string | null;
+  friendStatus?: string | null;
 }
 
 export interface PaginatedUsers {
@@ -1020,6 +1034,50 @@ export async function searchActiveUsers(query: string, page = 0, size = 20): Pro
   return fetchJson<PaginatedUsers>(
     `${API_BASE}/api/users/search?query=${encodeURIComponent(query)}&page=${page}&size=${size}`
   );
+}
+
+async function tryUserAction(candidates: { url: string; init: RequestInit }[]): Promise<void> {
+  let lastError: unknown = null;
+
+  for (const candidate of candidates) {
+    try {
+      await fetchJson<void>(candidate.url, candidate.init);
+      return;
+    } catch (err) {
+      lastError = err;
+      if (err instanceof ApiError && ![404, 405].includes(err.status)) {
+        throw err;
+      }
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new ApiError({ status: 404, detail: "Action endpoint not found" });
+}
+
+export async function followUser(userId: string): Promise<void> {
+  await tryUserAction([
+    { url: `${API_BASE}/api/users/${userId}/follow`, init: { method: "POST" } },
+    { url: `${API_BASE}/api/follows/${userId}`, init: { method: "POST" } },
+    { url: `${API_BASE}/api/users/${userId}/followers`, init: { method: "POST" } },
+  ]);
+}
+
+export async function unfollowUser(userId: string): Promise<void> {
+  await tryUserAction([
+    { url: `${API_BASE}/api/users/${userId}/follow`, init: { method: "DELETE" } },
+    { url: `${API_BASE}/api/users/${userId}/unfollow`, init: { method: "POST" } },
+    { url: `${API_BASE}/api/follows/${userId}`, init: { method: "DELETE" } },
+  ]);
+}
+
+export async function sendFriendRequest(userId: string): Promise<void> {
+  await tryUserAction([
+    { url: `${API_BASE}/api/friends/requests?userId=${encodeURIComponent(userId)}`, init: { method: "POST" } },
+    { url: `${API_BASE}/api/friends/request/${userId}`, init: { method: "POST" } },
+    { url: `${API_BASE}/api/users/${userId}/friend-request`, init: { method: "POST" } },
+    { url: `${API_BASE}/api/friendships/${userId}`, init: { method: "POST" } },
+  ]);
 }
 
 export async function deleteUserAccount(userId: string): Promise<void> {
@@ -1064,4 +1122,56 @@ export async function voteComment(commentId: string, voteType: "LIKE" | "DISLIKE
     method: "POST",
     body: JSON.stringify({ voteType, postId: null, commentId }),
   });
+}
+
+// ─── LoopMix ───
+
+export async function listPostsMedia(
+  type: "ALL" | "IMAGE" | "VIDEO" = "ALL",
+  page = 0,
+  size = 20
+): Promise<PaginatedPosts> {
+  return fetchJson<PaginatedPosts>(
+    `${API_BASE}/api/posts/media?type=${type}&page=${page}&size=${size}`
+  );
+}
+
+export async function recordPostView(postId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/posts/${postId}/view`, {
+    method: "POST",
+  });
+}
+
+export async function getRelatedPosts(postId: string, size = 10): Promise<FeedPost[]> {
+  return fetchJson<FeedPost[]>(
+    `${API_BASE}/api/posts/${postId}/related?size=${size}`
+  );
+}
+
+// ─── Bookmarks ───
+
+export async function bookmarkPost(postId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/bookmarks/${postId}`, {
+    method: "POST",
+  });
+}
+
+export async function unbookmarkPost(postId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/bookmarks/${postId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getBookmarkStatus(postId: string): Promise<{ bookmarked: boolean }> {
+  return fetchJson<{ bookmarked: boolean }>(`${API_BASE}/api/bookmarks/${postId}/status`);
+}
+
+export async function listBookmarks(page = 0, size = 20): Promise<PaginatedPosts> {
+  return fetchJson<PaginatedPosts>(
+    `${API_BASE}/api/bookmarks?page=${page}&size=${size}`
+  );
+}
+
+export async function getBookmarkCount(): Promise<{ count: number }> {
+  return fetchJson<{ count: number }>(`${API_BASE}/api/bookmarks/count`);
 }

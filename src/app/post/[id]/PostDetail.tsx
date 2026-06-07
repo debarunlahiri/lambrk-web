@@ -25,6 +25,8 @@ import {
   getPost,
   votePost,
   voteComment,
+  bookmarkPost,
+  unbookmarkPost,
   type ApiComment,
 } from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
@@ -80,6 +82,7 @@ export default function PostDetail({ params }: PostDetailProps) {
   const [liked, setLiked] = useState(false);
   const [disliked, setDisliked] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [bookmarking, setBookmarking] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [dislikeCount, setDislikeCount] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -146,6 +149,7 @@ export default function PostDetail({ params }: PostDetailProps) {
         setDislikeCount(mapped.dislikes);
         setLiked(mapped.userVote === "LIKE");
         setDisliked(mapped.userVote === "DISLIKE");
+        setSaved(mapped.isBookmarked ?? false);
         setPostLoading(false);
       })
       .catch((err: unknown) => {
@@ -250,6 +254,31 @@ export default function PostDetail({ params }: PostDetailProps) {
     }
   };
 
+  const handleBookmark = async () => {
+    if (!isAuthenticated) {
+      showToast("Log in to bookmark posts", "info");
+      return;
+    }
+    if (bookmarking || !postId) return;
+
+    const next = !saved;
+    setSaved(next);
+    setBookmarking(true);
+
+    try {
+      if (next) {
+        await bookmarkPost(postId);
+      } else {
+        await unbookmarkPost(postId);
+      }
+    } catch {
+      setSaved(!next);
+      showToast("Failed to update bookmark", "error");
+    } finally {
+      setBookmarking(false);
+    }
+  };
+
   if (postLoading) {
     return (
       <div className="flex flex-col gap-6 pb-8">
@@ -322,9 +351,17 @@ export default function PostDetail({ params }: PostDetailProps) {
                 <p className="text-xs text-muted">{post.author.handle}</p>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-xs text-muted">
-              <Clock size={12} />
-              <span>{post.timestamp}</span>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1 text-xs text-muted">
+                <Clock size={12} />
+                <span>{post.timestamp}</span>
+              </div>
+              {saved && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-1 text-[11px] font-bold text-accent">
+                  <Bookmark size={12} fill="currentColor" />
+                  Bookmarked
+                </span>
+              )}
             </div>
           </div>
 
@@ -381,12 +418,13 @@ export default function PostDetail({ params }: PostDetailProps) {
 
             <div className="flex items-center gap-0.5">
               <button
-                onClick={() => setSaved(!saved)}
+                onClick={handleBookmark}
+                disabled={bookmarking}
                 className={`flex h-10 w-10 items-center justify-center rounded-full transition-all ${
                   saved
                     ? "bg-accent/10 text-accent"
                     : "text-muted hover:bg-surface hover:text-foreground"
-                }`}
+                } ${bookmarking ? "opacity-60" : ""}`}
               >
                 <Bookmark size={18} fill={saved ? "currentColor" : "none"} />
               </button>

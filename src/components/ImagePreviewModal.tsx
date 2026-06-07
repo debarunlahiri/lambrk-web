@@ -18,7 +18,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getPost, listCommentsForPost, createComment, votePost, voteComment, type ApiComment } from "@/lib/api";
+import { getPost, listCommentsForPost, createComment, votePost, voteComment, bookmarkPost, unbookmarkPost, type ApiComment } from "@/lib/api";
 import CommentCard from "@/components/CommentCard";
 import MentionTextarea from "@/components/MentionTextarea";
 import type { Post } from "@/lib/data";
@@ -56,7 +56,8 @@ export default function ImagePreviewModal({ post, startIndex = 0, onClose }: Ima
   const [posting, setPosting] = useState(false);
   const [liked, setLiked] = useState(post.userVote === "LIKE");
   const [disliked, setDisliked] = useState(post.userVote === "DISLIKE");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(post.isBookmarked ?? false);
+  const [bookmarking, setBookmarking] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [dislikeCount, setDislikeCount] = useState(post.dislikes);
   const [voting, setVoting] = useState(false);
@@ -90,11 +91,13 @@ export default function ImagePreviewModal({ post, startIndex = 0, onClose }: Ima
           likes: p.likeCount,
           dislikes: p.dislikeCount,
           userVote: p.userVote,
+          isBookmarked: p.userSaved ?? false,
         }));
         setLikeCount(p.likeCount);
         setDislikeCount(p.dislikeCount);
         setLiked(p.userVote === "LIKE");
         setDisliked(p.userVote === "DISLIKE");
+        setSaved(p.userSaved ?? false);
       }).catch(() => {});
     }
   }, [post.id]);
@@ -233,9 +236,17 @@ export default function ImagePreviewModal({ post, startIndex = 0, onClose }: Ima
                 <p className="text-sm font-bold truncate">{fullPost.author.name}</p>
                 <p className="text-xs text-muted">{fullPost.author.handle}</p>
               </div>
-              <div className="flex items-center gap-1 text-xs text-muted">
-                <Clock size={12} />
-                <span>{fullPost.timestamp}</span>
+              <div className="flex flex-col items-end gap-1">
+                <div className="flex items-center gap-1 text-xs text-muted">
+                  <Clock size={12} />
+                  <span>{fullPost.timestamp}</span>
+                </div>
+                {saved && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-1 text-[11px] font-bold text-accent">
+                    <Bookmark size={12} fill="currentColor" />
+                    Bookmarked
+                  </span>
+                )}
               </div>
             </div>
 
@@ -263,7 +274,27 @@ export default function ImagePreviewModal({ post, startIndex = 0, onClose }: Ima
                   <Share2 size={16} />
                 </button>
               </div>
-              <button onClick={() => setSaved(!saved)} className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${saved ? "bg-accent/10 text-accent" : "text-muted hover:bg-surface"}`}>
+              <button
+                onClick={async () => {
+                  if (bookmarking || post.id.startsWith("pending-")) return;
+                  const next = !saved;
+                  setSaved(next);
+                  setBookmarking(true);
+                  try {
+                    if (next) {
+                      await bookmarkPost(post.id);
+                    } else {
+                      await unbookmarkPost(post.id);
+                    }
+                  } catch {
+                    setSaved(!next);
+                  } finally {
+                    setBookmarking(false);
+                  }
+                }}
+                disabled={bookmarking}
+                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${saved ? "bg-accent/10 text-accent" : "text-muted hover:bg-surface"} ${bookmarking ? "opacity-60" : ""}`}
+              >
                 <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
               </button>
             </div>

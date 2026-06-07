@@ -17,11 +17,12 @@ import {
   Loader2,
 } from "lucide-react";
 import type { Post } from "@/lib/data";
-import { votePost, deletePost } from "@/lib/api";
+import { votePost, deletePost, bookmarkPost, unbookmarkPost } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import ImagePreviewModal from "./ImagePreviewModal";
 import MediaCarousel from "./MediaCarousel";
+import LoginRequiredDialog from "./LoginRequiredDialog";
 
 interface PostCardProps {
   post: Post;
@@ -32,7 +33,8 @@ function PostCard({ post }: PostCardProps) {
   const { show: showToast } = useToast();
   const [liked, setLiked] = useState(post.userVote === "LIKE");
   const [disliked, setDisliked] = useState(post.userVote === "DISLIKE");
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] = useState(post.isBookmarked ?? false);
+  const [bookmarking, setBookmarking] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [dislikeCount, setDislikeCount] = useState(post.dislikes);
   const [voting, setVoting] = useState(false);
@@ -42,6 +44,8 @@ function PostCard({ post }: PostCardProps) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginAction, setLoginAction] = useState("do that");
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
@@ -98,6 +102,11 @@ function PostCard({ post }: PostCardProps) {
   };
 
   const handleLike = async () => {
+    if (!user) {
+      setLoginAction("like this post");
+      setShowLogin(true);
+      return;
+    }
     if (voting) return;
     setVoting(true);
 
@@ -132,6 +141,11 @@ function PostCard({ post }: PostCardProps) {
   };
 
   const handleDislike = async () => {
+    if (!user) {
+      setLoginAction("dislike this post");
+      setShowLogin(true);
+      return;
+    }
     if (voting) return;
     setVoting(true);
 
@@ -208,7 +222,15 @@ function PostCard({ post }: PostCardProps) {
                   <p className="text-xs text-muted">{post.author.handle}</p>
                 </div>
               </div>
-              <span className="text-xs text-muted whitespace-nowrap">{post.timestamp}</span>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-xs text-muted whitespace-nowrap">{post.timestamp}</span>
+                {saved && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-1 text-[11px] font-bold text-accent">
+                    <Bookmark size={12} fill="currentColor" />
+                    Bookmarked
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* Content */}
@@ -265,14 +287,37 @@ function PostCard({ post }: PostCardProps) {
                   </span>
                 </button>
 
-                <button className="flex h-9 items-center gap-1.5 rounded-full px-3 text-muted transition-all hover:bg-surface hover:text-foreground">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!user) {
+                      setLoginAction("comment on this post");
+                      setShowLogin(true);
+                      return;
+                    }
+                    router.push(`/post/${post.id}`);
+                  }}
+                  className="flex h-9 items-center gap-1.5 rounded-full px-3 text-muted transition-all hover:bg-surface hover:text-foreground"
+                >
                   <MessageCircle size={16} />
                   <span className="text-sm font-medium tabular-nums min-w-[1rem]">
                     {post.comments > 0 ? post.comments : ""}
                   </span>
                 </button>
 
-                <button className="flex h-9 items-center gap-1.5 rounded-full px-3 text-muted transition-all hover:bg-surface hover:text-foreground">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!user) {
+                      setLoginAction("repost this");
+                      setShowLogin(true);
+                      return;
+                    }
+                  }}
+                  className="flex h-9 items-center gap-1.5 rounded-full px-3 text-muted transition-all hover:bg-surface hover:text-foreground"
+                >
                   <Repeat size={16} />
                   <span className="text-sm font-medium tabular-nums min-w-[1rem]">
                     {post.reposts > 0 ? post.reposts : ""}
@@ -282,16 +327,36 @@ function PostCard({ post }: PostCardProps) {
 
               <div className="flex items-center gap-0.5">
                 <button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    setSaved(!saved);
+                    if (!user) {
+                      setLoginAction("bookmark this post");
+                      setShowLogin(true);
+                      return;
+                    }
+                    if (bookmarking || post.id.startsWith("pending-")) return;
+                    const next = !saved;
+                    setSaved(next);
+                    setBookmarking(true);
+                    try {
+                      if (next) {
+                        await bookmarkPost(post.id);
+                      } else {
+                        await unbookmarkPost(post.id);
+                      }
+                    } catch {
+                      setSaved(!next);
+                    } finally {
+                      setBookmarking(false);
+                    }
                   }}
+                  disabled={bookmarking}
                   className={`flex h-9 w-9 items-center justify-center rounded-full transition-all ${
                     saved
                       ? "bg-accent/10 text-accent"
                       : "text-muted hover:bg-surface hover:text-foreground"
-                  }`}
+                  } ${bookmarking ? "opacity-60" : ""}`}
                 >
                   <Bookmark size={16} fill={saved ? "currentColor" : "none"} />
                 </button>
@@ -388,6 +453,12 @@ function PostCard({ post }: PostCardProps) {
           onClose={() => setPreviewOpen(false)}
         />
       )}
+
+      <LoginRequiredDialog
+        open={showLogin}
+        onClose={() => setShowLogin(false)}
+        action={loginAction}
+      />
 
       {/* Delete confirmation dialog */}
       {showDeleteConfirm && (

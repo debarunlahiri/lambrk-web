@@ -7,12 +7,15 @@ import type { Post } from "@/lib/data";
 
 interface LoopMixViewerProps {
   posts: Post[];
+  onLoadMore?: () => void;
+  onLoadRelated?: (postId: string) => void;
 }
 
-export default function LoopMixViewer({ posts }: LoopMixViewerProps) {
+export default function LoopMixViewer({ posts, onLoadMore, onLoadRelated }: LoopMixViewerProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const loadedRelatedRef = useRef<Set<string>>(new Set());
 
   const scrollToIndex = useCallback((index: number) => {
     const clamped = Math.max(0, Math.min(index, posts.length - 1));
@@ -53,6 +56,40 @@ export default function LoopMixViewer({ posts }: LoopMixViewerProps) {
 
     return () => observer.disconnect();
   }, [posts]);
+
+  // Infinite scroll: trigger when last 3 items become visible
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !onLoadMore) return;
+
+    const sentinel = itemRefs.current[posts.length - 3] || itemRefs.current[posts.length - 1];
+    if (!sentinel) return;
+
+    const sentinelObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            onLoadMore();
+          }
+        }
+      },
+      { root: container, threshold: 0 }
+    );
+
+    sentinelObserver.observe(sentinel);
+    return () => sentinelObserver.disconnect();
+  }, [posts.length, onLoadMore]);
+
+  // Load related when at the very end
+  useEffect(() => {
+    if (activeIndex >= posts.length - 1 && onLoadRelated && posts.length > 0) {
+      const lastPostId = posts[posts.length - 1].id;
+      if (!loadedRelatedRef.current.has(lastPostId)) {
+        loadedRelatedRef.current.add(lastPostId);
+        onLoadRelated(lastPostId);
+      }
+    }
+  }, [activeIndex, posts, onLoadRelated]);
 
   // Keyboard navigation (up/down arrows)
   useEffect(() => {

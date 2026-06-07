@@ -2,25 +2,29 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ThumbsUp,
   ThumbsDown,
   MessageCircle,
   Share2,
   MoreHorizontal,
+  Bookmark,
   Volume2,
   VolumeX,
   Play,
   Pause,
 } from "lucide-react";
 import type { Post } from "@/lib/data";
-import { votePost } from "@/lib/api";
+import { votePost, recordPostView, bookmarkPost, unbookmarkPost } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   registerVideoPlayer,
   unregisterVideoPlayer,
   requestVideoPlay,
   notifyVideoStopped,
 } from "@/lib/video-controller";
+import LoginRequiredDialog from "./LoginRequiredDialog";
 
 interface LoopMixItemProps {
   post: Post;
@@ -29,14 +33,20 @@ interface LoopMixItemProps {
 
 export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const router = useRouter();
+  const { user } = useAuth();
   const [liked, setLiked] = useState(post.userVote === "LIKE");
   const [disliked, setDisliked] = useState(post.userVote === "DISLIKE");
   const [likeCount, setLikeCount] = useState(post.likes);
   const [dislikeCount, setDislikeCount] = useState(post.dislikes);
   const [voting, setVoting] = useState(false);
+  const [saved, setSaved] = useState(post.isBookmarked ?? false);
+  const [bookmarking, setBookmarking] = useState(false);
   const [muted, setMuted] = useState(false);
   const [paused, setPaused] = useState(false);
   const [showCenterBtn, setShowCenterBtn] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginAction, setLoginAction] = useState("do that");
   const centerBtnTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const playerIdRef = useRef(`lm-${post.id}-${Math.random().toString(36).slice(2, 7)}`);
 
@@ -74,6 +84,15 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
     }
   }, [isActive, isVideo]);
 
+  // Record view after ~2 seconds of being active
+  useEffect(() => {
+    if (!isActive || post.id.startsWith("pending-")) return;
+    const timer = setTimeout(() => {
+      recordPostView(post.id).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [isActive, post.id]);
+
   const showCenterButton = useCallback(() => {
     setShowCenterBtn(true);
     if (centerBtnTimerRef.current) clearTimeout(centerBtnTimerRef.current);
@@ -104,6 +123,11 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
 
   const handleLike = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    if (!user) {
+      setLoginAction("like this post");
+      setShowLogin(true);
+      return;
+    }
     if (voting || post.id.startsWith("pending-")) return;
     setVoting(true);
     const wasLiked = liked;
@@ -131,10 +155,15 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
     } finally {
       setVoting(false);
     }
-  }, [voting, liked, disliked, post.id, post.likes, post.dislikes]);
+  }, [voting, liked, disliked, post.id, post.likes, post.dislikes, user]);
 
   const handleDislike = useCallback(async (e?: React.MouseEvent) => {
     e?.stopPropagation();
+    if (!user) {
+      setLoginAction("dislike this post");
+      setShowLogin(true);
+      return;
+    }
     if (voting || post.id.startsWith("pending-")) return;
     setVoting(true);
     const wasLiked = liked;
@@ -162,7 +191,33 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
     } finally {
       setVoting(false);
     }
-  }, [voting, liked, disliked, post.id, post.likes, post.dislikes]);
+  }, [voting, liked, disliked, post.id, post.likes, post.dislikes, user]);
+
+  const handleBookmark = useCallback(async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!user) {
+      setLoginAction("bookmark this post");
+      setShowLogin(true);
+      return;
+    }
+    if (bookmarking || post.id.startsWith("pending-")) return;
+
+    const next = !saved;
+    setSaved(next);
+    setBookmarking(true);
+
+    try {
+      if (next) {
+        await bookmarkPost(post.id);
+      } else {
+        await unbookmarkPost(post.id);
+      }
+    } catch {
+      setSaved(!next);
+    } finally {
+      setBookmarking(false);
+    }
+  }, [bookmarking, post.id, saved, user]);
 
   useEffect(() => {
     return () => {
@@ -273,10 +328,17 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
         </button>
 
         {/* Comments */}
-        <Link
-          href={`/post/${post.id}`}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!user) {
+              setLoginAction("comment on this post");
+              setShowLogin(true);
+              return;
+            }
+            router.push(`/post/${post.id}`);
+          }}
           className="flex flex-col items-center gap-0.5 text-white"
-          onClick={(e) => e.stopPropagation()}
         >
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm">
             <MessageCircle size={22} />
@@ -284,7 +346,22 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
           <span className="text-[11px] font-bold drop-shadow-md">
             {post.comments > 0 ? post.comments : ""}
           </span>
-        </Link>
+        </button>
+
+        {/* Bookmark */}
+        <button
+          onClick={handleBookmark}
+          disabled={bookmarking}
+          className={`flex flex-col items-center gap-0.5 transition-colors ${
+            saved ? "text-accent" : "text-white"
+          } ${bookmarking ? "opacity-60" : ""}`}
+        >
+          <div className={`flex h-10 w-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm transition-transform active:scale-90 ${
+            saved ? "bg-accent/20" : ""
+          }`}>
+            <Bookmark size={20} fill={saved ? "currentColor" : "none"} />
+          </div>
+        </button>
 
         {/* Share */}
         <button
@@ -347,6 +424,15 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
         {/* Meta row */}
         <div className="flex items-center gap-2 text-[13px] text-white/50">
           <span>{post.timestamp}</span>
+          {saved && (
+            <>
+              <span className="text-white/30">·</span>
+              <span className="inline-flex items-center gap-1 text-accent">
+                <Bookmark size={12} fill="currentColor" />
+                Bookmarked
+              </span>
+            </>
+          )}
           {post.reposts > 0 && (
             <>
               <span className="text-white/30">·</span>
@@ -355,6 +441,12 @@ export default function LoopMixItem({ post, isActive }: LoopMixItemProps) {
           )}
         </div>
       </div>
+
+      <LoginRequiredDialog
+        open={showLogin}
+        onClose={() => setShowLogin(false)}
+        action={loginAction}
+      />
     </div>
   );
 }

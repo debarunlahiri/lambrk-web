@@ -41,6 +41,7 @@ export default function TopNav() {
     document.addEventListener("pointerdown", handleOutside);
     return () => document.removeEventListener("pointerdown", handleOutside);
   }, [dropdownOpen]);
+
   const avatarText = user?.displayName
     ? user.displayName
         .split(" ")
@@ -53,11 +54,13 @@ export default function TopNav() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+      const nextQuery = searchQuery.trim();
+      router.push(`/search?q=${encodeURIComponent(nextQuery)}`);
+      window.dispatchEvent(new CustomEvent("lambrk:search", { detail: nextQuery }));
     }
   };
 
-  const Dropdown = () =>
+  const dropdown =
     dropdownOpen ? (
       <div ref={dropdownRef} className="absolute right-0 top-full z-[100] mt-2 w-72 overflow-hidden rounded-3xl bg-black/90 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
         <Link
@@ -199,7 +202,7 @@ export default function TopNav() {
                 <ChevronDown size={14} className={`hidden sm:block text-white/60 transition-transform ${dropdownOpen ? "rotate-180" : ""}`} />
               </button>
 
-              <Dropdown />
+              {dropdown}
             </div>
           ) : (
             <>
@@ -220,7 +223,7 @@ export default function TopNav() {
         </div>
       </div>
 
-      {dropdownOpen && (
+      {isAuthenticated && dropdownOpen && (
         <div
           className="fixed inset-0 z-[99]"
           onClick={() => setDropdownOpen(false)}
@@ -228,7 +231,7 @@ export default function TopNav() {
         />
       )}
 
-      {showLogoutConfirm && (
+      {isAuthenticated && showLogoutConfirm && (
         createPortal(
           <>
             <div

@@ -19,6 +19,7 @@ export interface Post {
   reposts: number;
   timestamp: string;
   userVote?: string | null;
+  isBookmarked?: boolean;
 }
 
 export type { FeedPost } from "@/lib/api";
@@ -65,6 +66,7 @@ export function mapFeedPost(post: FeedPost): Post {
     reposts: post.repostCount ?? 0,
     timestamp: formatTimeAgo(post.createdAt),
     userVote: post.userVote,
+    isBookmarked: post.userSaved ?? false,
   };
 }
 

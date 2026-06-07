@@ -19,10 +19,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   getUserByUsername,
   listUserPosts,
+  followUser,
+  unfollowUser,
+  sendFriendRequest,
   type UserProfile,
 } from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
 import PostCard from "@/components/PostCard";
+import { useToast } from "@/contexts/ToastContext";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -36,7 +40,8 @@ const tabs = ["Posts", "Media"];
 export default function UserProfilePage() {
   const params = useParams();
   const username = params.username as string;
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isAuthenticated } = useAuth();
+  const { show: showToast } = useToast();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -44,8 +49,14 @@ export default function UserProfilePage() {
   const [postsLoading, setPostsLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("Posts");
+  const [following, setFollowing] = useState(false);
+  const [friendStatus, setFriendStatus] = useState("NONE");
+  const [followLoading, setFollowLoading] = useState(false);
+  const [friendLoading, setFriendLoading] = useState(false);
 
   const isOwnProfile = currentUser?.username === username;
+  const isFriend = friendStatus === "FRIENDS" || friendStatus === "ACCEPTED";
+  const isFriendPending = ["PENDING", "REQUESTED", "SENT"].includes(friendStatus);
   const avatarText = profile?.displayName
     ? profile.displayName
         .split(" ")
@@ -65,6 +76,10 @@ export default function UserProfilePage() {
       .then((data) => {
         if (cancelled) return;
         setProfile(data);
+        setFollowing(data.isFollowing ?? data.following ?? data.followedByCurrentUser ?? false);
+        setFriendStatus(
+          (data.friendshipStatus ?? data.friendStatus ?? (data.isFriend || data.friends ? "FRIENDS" : "NONE")).toUpperCase()
+        );
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -97,6 +112,54 @@ export default function UserProfilePage() {
       cancelled = true;
     };
   }, [profile]);
+
+  const requireAuth = (action: string) => {
+    if (isAuthenticated) return true;
+    showToast(`Log in to ${action}`, "info");
+    return false;
+  };
+
+  const handleFollow = async () => {
+    if (!profile || !requireAuth(following ? "unfollow users" : "follow users")) return;
+    if (followLoading) return;
+
+    const next = !following;
+    setFollowing(next);
+    setFollowLoading(true);
+
+    try {
+      if (next) {
+        await followUser(profile.id);
+      } else {
+        await unfollowUser(profile.id);
+      }
+      showToast(next ? "Following user" : "Unfollowed user", "success");
+    } catch (err: unknown) {
+      setFollowing(!next);
+      showToast(err instanceof Error ? err.message : "Failed to update follow", "error");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleFriendRequest = async () => {
+    if (!profile || !requireAuth("add friends")) return;
+    if (friendLoading || isFriend || isFriendPending) return;
+
+    const previous = friendStatus;
+    setFriendStatus("PENDING");
+    setFriendLoading(true);
+
+    try {
+      await sendFriendRequest(profile.id);
+      showToast("Friend request sent", "success");
+    } catch (err: unknown) {
+      setFriendStatus(previous);
+      showToast(err instanceof Error ? err.message : "Failed to send friend request", "error");
+    } finally {
+      setFriendLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -199,7 +262,7 @@ export default function UserProfilePage() {
 
       {/* Profile info */}
       <div className="mt-8 px-2">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black">{profile.displayName}</h1>
@@ -211,6 +274,41 @@ export default function UserProfilePage() {
             </div>
             <p className="text-sm text-muted">@{profile.username}</p>
           </div>
+          {!isOwnProfile && (
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-bold transition-all disabled:opacity-60 ${
+                  following
+                    ? "bg-surface text-foreground ring-1 ring-border hover:bg-border"
+                    : "bg-foreground text-background hover:opacity-80"
+                }`}
+              >
+                {followLoading ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                {following ? "Unfollow" : "Follow"}
+              </button>
+              {!isFriend && (
+                <button
+                  onClick={handleFriendRequest}
+                  disabled={friendLoading || isFriendPending}
+                  className="flex h-10 items-center gap-1.5 rounded-full bg-surface px-4 text-sm font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+                >
+                  {friendLoading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                  {isFriendPending ? "Request sent" : "Add Friend"}
+                </button>
+              )}
+              {isFriend && (
+                <Link
+                  href={`/messages?user=${encodeURIComponent(profile.username)}`}
+                  className="flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-bold text-white transition-all hover:opacity-80"
+                >
+                  <MessageCircle size={16} />
+                  Message
+                </Link>
+              )}
+            </div>
+          )}
         </div>
 
         {profile.bio && (

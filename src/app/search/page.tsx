@@ -9,6 +9,9 @@ import {
   TrendingUp,
   Hash,
   Users,
+  UserPlus,
+  UserCheck,
+  MessageCircle,
   FileText,
   X,
   Globe,
@@ -20,14 +23,19 @@ import {
   searchCommunitiesApi,
   searchUsers,
   getTrendingSearches,
+  followUser,
+  unfollowUser,
+  sendFriendRequest,
   type SearchResponse,
   type SearchUser,
   type Community,
 } from "@/lib/api";
-import { mapFeedPost, type Post } from "@/lib/data";
+import { mapFeedPost } from "@/lib/data";
 import PostCard from "@/components/PostCard";
 import BackButton from "@/components/BackButton";
-import { SearchSkeleton, PostSkeletonList, UserCardSkeleton, CommunityCardSkeleton } from "@/components/Skeleton";
+import { SearchSkeleton, PostSkeletonList, CommunityCardSkeleton } from "@/components/Skeleton";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 
 type SearchTab = "all" | "posts" | "communities" | "users";
 
@@ -39,48 +47,145 @@ const tabs: { key: SearchTab; label: string; icon: typeof FileText }[] = [
 ];
 
 function UserCard({ user }: { user: SearchUser }) {
+  const { user: currentUser, isAuthenticated } = useAuth();
+  const { show: showToast } = useToast();
+  const [following, setFollowing] = useState(
+    user.isFollowing ?? user.following ?? user.followedByCurrentUser ?? false
+  );
+  const [friendStatus, setFriendStatus] = useState(
+    (user.friendshipStatus ?? user.friendStatus ?? (user.isFriend || user.friends ? "FRIENDS" : "NONE")).toUpperCase()
+  );
+  const [followLoading, setFollowLoading] = useState(false);
+  const [friendLoading, setFriendLoading] = useState(false);
+
   const initials = user.displayName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase() || "??";
+  const isOwnUser = currentUser?.username === user.username || currentUser?.id === user.id;
+  const isFriend = friendStatus === "FRIENDS" || friendStatus === "ACCEPTED";
+  const isFriendPending = ["PENDING", "REQUESTED", "SENT"].includes(friendStatus);
+
+  const requireAuth = (action: string) => {
+    if (isAuthenticated) return true;
+    showToast(`Log in to ${action}`, "info");
+    return false;
+  };
+
+  const handleFollow = async () => {
+    if (!requireAuth(following ? "unfollow users" : "follow users")) return;
+    if (followLoading) return;
+
+    const next = !following;
+    setFollowing(next);
+    setFollowLoading(true);
+
+    try {
+      if (next) {
+        await followUser(user.id);
+      } else {
+        await unfollowUser(user.id);
+      }
+      showToast(next ? "Following user" : "Unfollowed user", "success");
+    } catch (err: unknown) {
+      setFollowing(!next);
+      showToast(err instanceof Error ? err.message : "Failed to update follow", "error");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleFriendRequest = async () => {
+    if (!requireAuth("add friends")) return;
+    if (friendLoading || isFriend || isFriendPending) return;
+
+    const previous = friendStatus;
+    setFriendStatus("PENDING");
+    setFriendLoading(true);
+
+    try {
+      await sendFriendRequest(user.id);
+      showToast("Friend request sent", "success");
+    } catch (err: unknown) {
+      setFriendStatus(previous);
+      showToast(err instanceof Error ? err.message : "Failed to send friend request", "error");
+    } finally {
+      setFriendLoading(false);
+    }
+  };
 
   return (
-    <Link
-      href={`/user/${user.username}`}
-      className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-all hover:shadow-md hover:ring-accent/20"
-    >
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden shadow-sm">
-        {user.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          initials
-        )}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <p className="font-bold truncate">{user.displayName}</p>
-          {user.isVerified && (
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[8px] font-bold text-white">
-              ✓
-            </span>
+    <div className="flex flex-col gap-3 rounded-2xl bg-card p-4 shadow-sm ring-1 ring-border transition-all hover:shadow-md hover:ring-accent/20 sm:flex-row sm:items-center">
+      <Link href={`/user/${user.username}`} className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-2 text-sm font-bold text-white overflow-hidden shadow-sm">
+          {user.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            initials
           )}
         </div>
-        <p className="text-xs text-muted">@{user.username}</p>
-        {user.bio && (
-          <p className="text-xs text-muted truncate mt-0.5">{user.bio}</p>
-        )}
-      </div>
-      <div className="flex items-center gap-1 text-xs text-muted shrink-0">
-        {user.karma > 0 && <span>{user.karma} karma</span>}
-      </div>
-    </Link>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="font-bold truncate">{user.displayName}</p>
+            {user.isVerified && (
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[8px] font-bold text-white">
+                ✓
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-muted">@{user.username}</p>
+          {user.bio && (
+            <p className="text-xs text-muted truncate mt-0.5">{user.bio}</p>
+          )}
+          {user.karma > 0 && <p className="mt-0.5 text-xs text-muted">{user.karma} karma</p>}
+        </div>
+      </Link>
+
+      {!isOwnUser && (
+        <div className="flex flex-wrap gap-2 sm:justify-end">
+          <button
+            onClick={handleFollow}
+            disabled={followLoading}
+            className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition-all disabled:opacity-60 ${
+              following
+                ? "bg-surface text-foreground ring-1 ring-border hover:bg-border"
+                : "bg-foreground text-background hover:opacity-80"
+            }`}
+          >
+            {followLoading ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+            {following ? "Unfollow" : "Follow"}
+          </button>
+
+          {!isFriend && (
+            <button
+              onClick={handleFriendRequest}
+              disabled={friendLoading || isFriendPending}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-xs font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+            >
+              {friendLoading ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+              {isFriendPending ? "Request sent" : "Add Friend"}
+            </button>
+          )}
+
+          {isFriend && (
+            <Link
+              href={`/messages?user=${encodeURIComponent(user.username)}`}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3 text-xs font-bold text-white transition-all hover:opacity-80"
+            >
+              <MessageCircle size={14} />
+              Message
+            </Link>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -122,6 +227,7 @@ export default function SearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [searched, setSearched] = useState(false);
+  const [usingTopSearch, setUsingTopSearch] = useState(false);
 
   const [suggestions, setSuggestions] = useState<SearchUser[]>([]);
   const [suggLoading, setSuggLoading] = useState(false);
@@ -132,6 +238,7 @@ export default function SearchPage() {
 
   const inputRef = useRef<HTMLInputElement>(null);
   const suggTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const initializedTopSearchRef = useRef(false);
 
   useEffect(() => {
     getTrendingSearches()
@@ -173,6 +280,32 @@ export default function SearchPage() {
     },
     [tab]
   );
+
+  useEffect(() => {
+    const runTopSearch = (value: string) => {
+      const nextQuery = value.trim();
+      if (!nextQuery) return;
+      setUsingTopSearch(true);
+      setQuery(nextQuery);
+      setSuggestions([]);
+      setShowSuggestions(false);
+      void doSearch(nextQuery);
+    };
+
+    if (!initializedTopSearchRef.current) {
+      initializedTopSearchRef.current = true;
+      const initialQuery = new URLSearchParams(window.location.search).get("q");
+      if (initialQuery) runTopSearch(initialQuery);
+    }
+
+    const handleTopSearch = (event: Event) => {
+      const nextQuery = (event as CustomEvent<string>).detail;
+      if (typeof nextQuery === "string") runTopSearch(nextQuery);
+    };
+
+    window.addEventListener("lambrk:search", handleTopSearch);
+    return () => window.removeEventListener("lambrk:search", handleTopSearch);
+  }, [doSearch]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
@@ -249,6 +382,7 @@ export default function SearchPage() {
   return (
     <div className="flex flex-col gap-6 pb-8">
       {/* Header */}
+      {!usingTopSearch && (
       <div className="sticky top-0 z-10 -mx-4 bg-background/85 px-4 py-3 backdrop-blur-2xl md:-mx-0 md:bg-transparent md:px-0 md:backdrop-blur-none">
         <div className="flex items-center gap-3">
           <BackButton fallback="/" label="" />
@@ -353,6 +487,17 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+      )}
+
+      {usingTopSearch && searched && (
+        <div className="flex items-center gap-3">
+          <BackButton fallback="/" label="" />
+          <div className="min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">Search results</p>
+            <h1 className="truncate text-xl font-black text-foreground">{query}</h1>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       {searched && (

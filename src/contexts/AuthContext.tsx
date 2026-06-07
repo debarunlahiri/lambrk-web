@@ -69,6 +69,9 @@ function clearAuth() {
   localStorage.removeItem("lambrk_refresh_token");
   localStorage.removeItem("lambrk_user");
   localStorage.removeItem("lambrk_token_expires_at");
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("lambrk:logout"));
+  }
 }
 
 // ─── Global token refresh coordination ───
@@ -120,19 +123,14 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
   const clear = useCallback(() => {
     clearAuth();
     setUser(null);
+    setIsLoading(false);
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = null;
     }
   }, []);
 
-  const persist = useCallback((data: AuthResponse) => {
-    persistAuth(data);
-    setUser(data.user);
-    scheduleRefresh(data.expiresIn);
-  }, []);
-
-  const scheduleRefresh = useCallback((expiresIn: number) => {
+  const scheduleRefresh = useCallback(function scheduleNextRefresh(expiresIn: number) {
     if (refreshTimerRef.current) {
       clearTimeout(refreshTimerRef.current);
     }
@@ -142,17 +140,23 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       const data = await performRefresh();
       if (data) {
         setUser(data.user);
-        scheduleRefresh(data.expiresIn);
+        scheduleNextRefresh(data.expiresIn);
       } else {
-        setUser(null);
+        clear();
       }
     }, refreshAfter);
-  }, []);
+  }, [clear]);
+
+  const persist = useCallback((data: AuthResponse) => {
+    persistAuth(data);
+    setUser(data.user);
+    setIsLoading(false);
+    scheduleRefresh(data.expiresIn);
+  }, [scheduleRefresh]);
 
   // Initial auth check
   useEffect(() => {
     let cancelled = false;
-    let safetyTimer: ReturnType<typeof setTimeout>;
 
     const finish = () => {
       if (!cancelled) setIsLoading(false);
@@ -176,7 +180,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Safety: always show UI after 2s even if refresh hangs
-    safetyTimer = setTimeout(finish, 2000);
+    const safetyTimer = setTimeout(finish, 2000);
 
     // Always try to refresh to get fresh tokens and verify validity
     performRefresh()
@@ -186,11 +190,11 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
           setUser(data.user);
           scheduleRefresh(data.expiresIn);
         } else {
-          setUser(null);
+          clear();
         }
       })
       .catch(() => {
-        if (!cancelled) setUser(null);
+        if (!cancelled) clear();
       })
       .finally(() => {
         clearTimeout(safetyTimer);
@@ -201,7 +205,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       clearTimeout(safetyTimer);
     };
-  }, [scheduleRefresh]);
+  }, [clear, scheduleRefresh]);
 
   // Register unauthorized handler for auto-refresh on 401s
   useEffect(() => {
@@ -212,7 +216,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         scheduleRefresh(data.expiresIn);
         return true;
       }
-      setUser(null);
+      clear();
       return false;
     });
     return () => {
@@ -221,7 +225,7 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         clearTimeout(refreshTimerRef.current);
       }
     };
-  }, [scheduleRefresh]);
+  }, [clear, scheduleRefresh]);
 
   const login = useCallback(
     async (username: string, password: string) => {
@@ -255,9 +259,9 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       scheduleRefresh(data.expiresIn);
       return true;
     }
-    setUser(null);
+    clear();
     return false;
-  }, [scheduleRefresh]);
+  }, [clear, scheduleRefresh]);
 
   const value = useMemo(
     () => ({

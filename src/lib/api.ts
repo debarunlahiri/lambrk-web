@@ -109,6 +109,12 @@ async function fetchJson<T>(url: string, init?: RequestInit, retry = true): Prom
       throw new ApiError(errBody);
     }
 
+    // Handle empty responses (e.g. 204 No Content on DELETE)
+    const contentLength = res.headers.get("content-length");
+    if (res.status === 204 || contentLength === "0" || !contentLength) {
+      return undefined as T;
+    }
+
     return res.json();
   } catch (err) {
     if (err instanceof ApiError) throw err;

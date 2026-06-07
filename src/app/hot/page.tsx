@@ -57,7 +57,7 @@ export default function HotPage() {
           <p className="text-sm font-bold">Failed to load hot posts</p>
           <p className="text-xs">{error}</p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => { if (typeof window !== "undefined") window.location.reload(); }}
             className="mt-2 rounded-full bg-surface px-4 py-1.5 text-xs font-medium transition-colors hover:bg-border"
           >
             Retry

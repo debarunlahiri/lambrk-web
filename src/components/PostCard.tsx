@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, memo, useRef, useEffect } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ThumbsUp,
   ThumbsDown,
@@ -10,7 +10,6 @@ import {
   Share2,
   Bookmark,
   MoreHorizontal,
-  Play,
   Copy,
   ExternalLink,
   Trash2,
@@ -22,6 +21,7 @@ import { votePost, deletePost } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import ImagePreviewModal from "./ImagePreviewModal";
+import MediaCarousel from "./MediaCarousel";
 
 interface PostCardProps {
   post: Post;
@@ -41,7 +41,9 @@ function PostCard({ post }: PostCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
   const isOwnPost = user?.username === post.author.handle.replace("@", "");
 
@@ -87,8 +89,7 @@ function PostCard({ post }: PostCardProps) {
     try {
       await deletePost(post.id);
       showToast("Post deleted", "success");
-      // Hide the card visually
-      setShowDeleteConfirm(false);
+      setDeleted(true);
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : "Failed to delete post", "error");
     } finally {
@@ -164,12 +165,33 @@ function PostCard({ post }: PostCardProps) {
     }
   };
 
-  const mediaCount = post.media?.length ?? 0;
+
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    // Don't navigate if clicking on interactive elements
+    if (
+      target.closest("button") ||
+      target.closest("video") ||
+      target.closest("a") ||
+      target.closest("[role='button']") ||
+      target.closest("input") ||
+      target.closest("textarea") ||
+      target.closest("select")
+    ) {
+      return;
+    }
+    router.push(`/post/${post.id}`);
+  };
+
+  if (deleted) return null;
 
   return (
     <>
-      <Link href={`/post/${post.id}`} className="block group/card">
-        <article className="relative overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-border transition-all duration-300 hover:shadow-lg hover:ring-accent/20 hover:-translate-y-0.5">
+      <article
+        onClick={handleCardClick}
+        className="relative cursor-pointer overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-border transition-all duration-300 hover:shadow-lg hover:ring-accent/20 hover:-translate-y-0.5 group/card"
+      >
           <div className="flex flex-col gap-3 p-4 sm:p-5">
             {/* Header */}
             <div className="flex items-center justify-between">
@@ -194,53 +216,13 @@ function PostCard({ post }: PostCardProps) {
               {post.content}
             </p>
 
-            {/* Media */}
-            {post.media && post.media.length > 0 && (() => {
-              if (mediaCount === 1) {
-                return (
-                  <div
-                    className="overflow-hidden rounded-2xl cursor-zoom-in relative"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewIndex(0); setPreviewOpen(true); }}
-                  >
-                    <MediaContent item={post.media[0]} />
-                  </div>
-                );
-              }
-              if (mediaCount === 3) {
-                return (
-                  <div className="grid grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-2xl max-h-[380px]">
-                    <div
-                      className="row-span-2 relative overflow-hidden bg-surface cursor-zoom-in"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewIndex(0); setPreviewOpen(true); }}
-                    >
-                      <MediaContent item={post.media[0]} />
-                    </div>
-                    <div
-                      className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewIndex(1); setPreviewOpen(true); }}
-                    >
-                      <MediaContent item={post.media[1]} />
-                    </div>
-                    <div
-                      className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setPreviewIndex(2); setPreviewOpen(true); }}
-                    >
-                      <MediaContent item={post.media[2]} />
-                    </div>
-                  </div>
-                );
-              }
-              return (
-                <div className={`grid gap-1.5 overflow-hidden rounded-2xl grid-cols-2 max-h-[380px]`}>
-                  {post.media.slice(0, 4).map((item, index) => {
-                    const showOverlay = mediaCount > 4 && index === 3;
-                    return (
-                      <MediaItem key={index} item={item} index={index} onClick={(i) => { setPreviewIndex(i); setPreviewOpen(true); }} overCount={showOverlay ? mediaCount - 4 : 0} />
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            {/* Media — Instagram carousel */}
+            {post.media && post.media.length > 0 && (
+              <MediaCarousel
+                media={post.media}
+                onOpenPreview={(index) => { setPreviewIndex(index); setPreviewOpen(true); }}
+              />
+            )}
 
             {/* Actions */}
             <div className="flex items-center justify-between pt-1">
@@ -398,7 +380,6 @@ function PostCard({ post }: PostCardProps) {
             </div>
           </div>
         </article>
-      </Link>
 
       {previewOpen && (
         <ImagePreviewModal
@@ -442,68 +423,6 @@ function PostCard({ post }: PostCardProps) {
         </div>
       )}
     </>
-  );
-}
-
-type MediaItemType = { type: "image" | "video"; url: string };
-
-function MediaContent({ item }: { item: MediaItemType }) {
-  if (item.type === "video") {
-    return (
-      <>
-        <video
-          src={item.url}
-          className="h-full w-full object-cover"
-          muted
-          loop
-          playsInline
-          preload="none"
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/20 backdrop-blur-md ring-1 ring-white/30 transition-transform group-hover/card:scale-110">
-            <Play size={20} fill="white" className="ml-0.5 text-white" />
-          </div>
-        </div>
-      </>
-    );
-  }
-  return (
-    <img
-      src={item.url}
-      alt=""
-      loading="lazy"
-      className="h-full w-full object-cover transition-transform duration-700 group-hover/card:scale-105"
-    />
-  );
-}
-
-function MediaItem({
-  item,
-  index,
-  onClick,
-  overCount,
-}: {
-  item: MediaItemType;
-  index: number;
-  onClick: (index: number) => void;
-  overCount?: number;
-}) {
-  return (
-    <div
-      className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onClick(index);
-      }}
-    >
-      <MediaContent item={item} />
-      {overCount && overCount > 0 && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-lg font-bold text-white backdrop-blur-[2px]">
-          +{overCount}
-        </div>
-      )}
-    </div>
   );
 }
 

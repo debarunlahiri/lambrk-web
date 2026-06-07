@@ -5,7 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
-import { Home, Search, Flame, User, LogIn, Bell, PenLine } from "lucide-react";
+import { Home, Flame, User, LogIn, Bell, PenLine } from "lucide-react";
+import LoopMixIcon from "./LoopMixIcon";
 
 function useIsClient() {
   return useSyncExternalStore(
@@ -33,7 +34,7 @@ export default function BottomNav() {
   // Build nav items based on auth state
   const leftItems: NavItem[] = [
     { name: "Home", href: "/", icon: Home },
-    { name: "Search", href: "/search", icon: Search },
+    { name: "LoopMix", href: "/loopmix", icon: LoopMixIcon as unknown as typeof Home },
   ];
 
   const rightItems: NavItem[] = isAuthenticated
@@ -47,6 +48,10 @@ export default function BottomNav() {
       ];
 
   const isCreatePage = pathname === "/compose";
+  const isLoopMix = pathname === "/loopmix";
+
+  // Hide bottom nav on loopmix for full immersion
+  if (isLoopMix) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
@@ -61,10 +66,8 @@ export default function BottomNav() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1.5 min-w-[4rem] transition-all ${
-                  isActive
-                    ? "text-accent"
-                    : "text-muted hover:text-foreground"
+                className={`flex flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[3.5rem] transition-all ${
+                  isActive ? "text-accent" : "text-muted hover:text-foreground"
                 }`}
               >
                 <Icon size={22} strokeWidth={isActive ? 2.5 : 1.5} />
@@ -100,10 +103,8 @@ export default function BottomNav() {
               <Link
                 key={item.name}
                 href={item.href}
-                className={`relative flex flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-1.5 min-w-[4rem] transition-all ${
-                  isActive
-                    ? "text-accent"
-                    : "text-muted hover:text-foreground"
+                className={`relative flex flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1.5 min-w-[3.5rem] transition-all ${
+                  isActive ? "text-accent" : "text-muted hover:text-foreground"
                 }`}
               >
                 <div className="relative">

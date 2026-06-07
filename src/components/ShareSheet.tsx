@@ -6,9 +6,9 @@ import {
   Link as LinkIcon,
   MessageCircle,
   Send,
-  Facebook,
-  Twitter,
-  Linkedin,
+  Globe,
+  AtSign,
+  Briefcase,
   Mail,
   Check,
 } from "lucide-react";
@@ -38,14 +38,14 @@ const platforms = [
   },
   {
     name: "Facebook",
-    icon: Facebook,
+    icon: Globe,
     color: "text-blue-600",
     bg: "bg-blue-600/10",
     getUrl: (u: string) => `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(u)}`,
   },
   {
     name: "X",
-    icon: Twitter,
+    icon: AtSign,
     color: "text-foreground",
     bg: "bg-surface",
     getUrl: (u: string, t?: string) =>
@@ -53,7 +53,7 @@ const platforms = [
   },
   {
     name: "LinkedIn",
-    icon: Linkedin,
+    icon: Briefcase,
     color: "text-blue-700",
     bg: "bg-blue-700/10",
     getUrl: (u: string) => `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(u)}`,

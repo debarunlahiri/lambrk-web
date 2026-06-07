@@ -30,6 +30,7 @@ import {
 import { mapFeedPost, type Post } from "@/lib/data";
 import BackButton from "@/components/BackButton";
 import ImagePreviewModal from "@/components/ImagePreviewModal";
+import MediaCarousel from "@/components/MediaCarousel";
 import CommentCard from "@/components/CommentCard";
 import MentionTextarea from "@/components/MentionTextarea";
 import { PostSkeleton, SkeletonPulse } from "@/components/Skeleton";
@@ -291,7 +292,7 @@ export default function PostDetail({ params }: PostDetailProps) {
     );
   }
 
-  const mediaCount = post.media?.length ?? 0;
+
 
   return (
     <div className="flex flex-col gap-0 pb-8">
@@ -332,77 +333,12 @@ export default function PostDetail({ params }: PostDetailProps) {
             {post.content}
           </p>
 
-          {/* Media */}
+          {/* Media — Instagram carousel */}
           {post.media && post.media.length > 0 && (
-            mediaCount === 1 ? (
-              <div
-                className="overflow-hidden rounded-2xl cursor-zoom-in relative"
-                onClick={() => { setPreviewIndex(0); setPreviewOpen(true); }}
-              >
-                {post.media[0].type === "video" ? (
-                  <video src={post.media[0].url} className="w-full h-auto max-h-[400px] object-cover" controls preload="none" />
-                ) : (
-                  <img src={post.media[0].url} alt="" loading="lazy" className="w-full h-auto max-h-[400px] object-cover" />
-                )}
-              </div>
-            ) : mediaCount === 3 ? (
-              <div className="grid grid-cols-2 grid-rows-2 gap-1.5 overflow-hidden rounded-2xl max-h-[400px]">
-                <div
-                  className="row-span-2 relative overflow-hidden bg-surface cursor-zoom-in"
-                  onClick={() => { setPreviewIndex(0); setPreviewOpen(true); }}
-                >
-                  {post.media[0].type === "video" ? (
-                    <video src={post.media[0].url} className="h-full w-full object-cover" controls preload="none" />
-                  ) : (
-                    <img src={post.media[0].url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div
-                  className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
-                  onClick={() => { setPreviewIndex(1); setPreviewOpen(true); }}
-                >
-                  {post.media[1].type === "video" ? (
-                    <video src={post.media[1].url} className="h-full w-full object-cover" controls preload="none" />
-                  ) : (
-                    <img src={post.media[1].url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div
-                  className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
-                  onClick={() => { setPreviewIndex(2); setPreviewOpen(true); }}
-                >
-                  {post.media[2].type === "video" ? (
-                    <video src={post.media[2].url} className="h-full w-full object-cover" controls preload="none" />
-                  ) : (
-                    <img src={post.media[2].url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-1.5 overflow-hidden rounded-2xl max-h-[400px]">
-                {post.media.slice(0, 4).map((item, index) => {
-                  const showOverlay = mediaCount > 4 && index === 3;
-                  return (
-                    <div
-                      key={index}
-                      className="relative overflow-hidden bg-surface cursor-zoom-in aspect-square"
-                      onClick={() => { setPreviewIndex(index); setPreviewOpen(true); }}
-                    >
-                      {item.type === "video" ? (
-                        <video src={item.url} className="h-full w-full object-cover" controls preload="none" />
-                      ) : (
-                        <img src={item.url} alt="" loading="lazy" className="h-full w-full object-cover" />
-                      )}
-                      {showOverlay && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-lg font-bold text-white backdrop-blur-[2px]">
-                          +{mediaCount - 4}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )
+            <MediaCarousel
+              media={post.media}
+              onOpenPreview={(index) => { setPreviewIndex(index); setPreviewOpen(true); }}
+            />
           )}
 
           {/* Action Bar */}

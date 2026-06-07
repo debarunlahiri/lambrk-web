@@ -20,7 +20,6 @@ import { mapFeedPost, type Post } from "@/lib/data";
 import PostCard from "@/components/PostCard";
 import BackButton from "@/components/BackButton";
 import { ProfileSkeleton, PostSkeletonList } from "@/components/Skeleton";
-import SocialListDialog, { type SocialListKind } from "@/components/SocialListDialog";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -39,7 +38,6 @@ export default function ProfilePage() {
   const [postsLoading, setPostsLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("Posts");
-  const [socialList, setSocialList] = useState<SocialListKind | null>(null);
 
   const displayUser = profile || user;
   const avatarText = displayUser?.displayName
@@ -200,33 +198,33 @@ export default function ProfilePage() {
             <strong className="text-foreground text-lg font-bold tabular-nums">{posts.length}</strong>
             <span className="text-muted">Posts</span>
           </span>
-          <button
-            onClick={() => setSocialList("followers")}
+          <Link
+            href={`/user/${encodeURIComponent(displayUser?.username || "")}/social?tab=followers`}
             className="flex items-center gap-1.5 transition-colors hover:text-accent"
           >
             <strong className="text-foreground text-lg font-bold tabular-nums">
               {displayUser?.followerCount ?? 0}
             </strong>
             <span className="text-muted">Followers</span>
-          </button>
-          <button
-            onClick={() => setSocialList("following")}
+          </Link>
+          <Link
+            href={`/user/${encodeURIComponent(displayUser?.username || "")}/social?tab=following`}
             className="flex items-center gap-1.5 transition-colors hover:text-accent"
           >
             <strong className="text-foreground text-lg font-bold tabular-nums">
               {displayUser?.followingCount ?? 0}
             </strong>
             <span className="text-muted">Following</span>
-          </button>
-          <button
-            onClick={() => setSocialList("friends")}
+          </Link>
+          <Link
+            href={`/user/${encodeURIComponent(displayUser?.username || "")}/social?tab=friends`}
             className="flex items-center gap-1.5 transition-colors hover:text-accent"
           >
             <strong className="text-foreground text-lg font-bold tabular-nums">
               {displayUser?.friendCount ?? 0}
             </strong>
             <span className="text-muted">Friends</span>
-          </button>
+          </Link>
           <span className="flex items-center gap-1.5">
             <strong className="text-foreground text-lg font-bold tabular-nums">
               {mediaPosts.length}
@@ -235,17 +233,6 @@ export default function ProfilePage() {
           </span>
         </div>
       </div>
-
-      {displayUser && (
-        <SocialListDialog
-          open={socialList !== null}
-          kind={socialList ?? "followers"}
-          userId={displayUser.id}
-          username={displayUser.username}
-          canView
-          onClose={() => setSocialList(null)}
-        />
-      )}
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-2xl bg-surface p-1">

@@ -104,6 +104,7 @@ export default function FilesPage() {
 
   useEffect(() => {
     if (!searchQuery.trim()) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchFiles();
   }, [filter]);
 

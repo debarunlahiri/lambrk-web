@@ -30,7 +30,7 @@ const HIDDEN_PATHS = ["/login", "/register"];
 export default function Sidebar() {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
-  const { unreadCount } = useWebSocket();
+  const { unreadCount, unreadMessageCount } = useWebSocket();
 
   // Hide sidebar on auth pages
   if (HIDDEN_PATHS.includes(pathname)) return null;
@@ -41,7 +41,7 @@ export default function Sidebar() {
     { name: "Hot", href: "/hot", icon: TrendingUp, guestOnly: true },
     { name: "Bookmarks", href: "/bookmarks", icon: Bookmark, authOnly: true },
     { name: "Notifications", href: "/notifications", icon: Bell, authOnly: true, badge: unreadCount },
-    { name: "Messages", href: "/messages", icon: MessageCircle, authOnly: true },
+    { name: "Messages", href: "/messages", icon: MessageCircle, authOnly: true, badge: unreadMessageCount },
     { name: "Profile", href: "/profile", icon: User, authOnly: true },
     { name: "Sign In", href: "/login", icon: LogIn, guestOnly: true },
   ];

@@ -689,14 +689,20 @@ export async function getFeedDiscover(limit = 20): Promise<FeedResponse> {
 
 export interface PaginatedPosts {
   content: FeedPost[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-  first: boolean;
-  last: boolean;
-  numberOfElements: number;
-  empty: boolean;
+  totalElements?: number;
+  totalPages?: number;
+  size?: number;
+  number?: number;
+  first?: boolean;
+  last?: boolean;
+  numberOfElements?: number;
+  empty?: boolean;
+  page?: {
+    size: number;
+    number: number;
+    totalElements: number;
+    totalPages: number;
+  };
 }
 
 export interface CreatePostRequest {
@@ -1414,4 +1420,115 @@ export async function listBookmarks(page = 0, size = 20): Promise<PaginatedPosts
 
 export async function getBookmarkCount(): Promise<{ count: number }> {
   return fetchJson<{ count: number }>(`${API_BASE}/api/bookmarks/count`);
+}
+
+// ─── Messages ───
+
+export type MessageType = "TEXT" | "IMAGE" | "VIDEO" | "FILE" | "SYSTEM";
+
+export interface ChatMessageResponse {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderUsername: string;
+  senderAvatarUrl: string | null;
+  recipientId: string;
+  recipientUsername: string;
+  content: string | null;
+  messageType: MessageType;
+  attachmentUrl: string | null;
+  attachmentType: string | null;
+  isRead: boolean;
+  readAt: string | null;
+  isDeleted: boolean;
+  createdAt: string;
+}
+
+export interface ConversationResponse {
+  id: string;
+  conversationId: string;
+  otherParticipantId: string;
+  otherParticipantUsername: string;
+  lastMessage: string | null;
+  lastMessageSenderId: string | null;
+  lastMessageAt: string | null;
+  unreadCount: number;
+  createdAt: string;
+}
+
+export interface PaginatedConversations {
+  content: ConversationResponse[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}
+
+export interface PaginatedMessages {
+  content: ChatMessageResponse[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}
+
+export interface SendMessageRequest {
+  recipientUsername: string;
+  content: string;
+  messageType?: MessageType;
+  attachmentUrl?: string | null;
+  attachmentType?: string | null;
+}
+
+export async function getConversations(page = 0, size = 20): Promise<PaginatedConversations> {
+  return fetchJson<PaginatedConversations>(
+    `${API_BASE}/api/messages/conversations?page=${page}&size=${size}`
+  );
+}
+
+export async function openConversation(username: string): Promise<ConversationResponse> {
+  return fetchJson<ConversationResponse>(
+    `${API_BASE}/api/messages/conversations/${encodeURIComponent(username)}`
+  );
+}
+
+export async function getMessages(
+  conversationId: string,
+  page = 0,
+  size = 30
+): Promise<PaginatedMessages> {
+  return fetchJson<PaginatedMessages>(
+    `${API_BASE}/api/messages/${encodeURIComponent(conversationId)}?page=${page}&size=${size}`
+  );
+}
+
+export async function sendMessage(data: SendMessageRequest): Promise<ChatMessageResponse> {
+  return fetchJson<ChatMessageResponse>(`${API_BASE}/api/messages`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function markMessageRead(messageId: string): Promise<ChatMessageResponse> {
+  return fetchJson<ChatMessageResponse>(`${API_BASE}/api/messages/${messageId}/read`, {
+    method: "PUT",
+  });
+}
+
+export async function deleteMessage(messageId: string): Promise<ChatMessageResponse> {
+  return fetchJson<ChatMessageResponse>(`${API_BASE}/api/messages/${messageId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getUnreadMessageCount(): Promise<number> {
+  return fetchJson<number>(`${API_BASE}/api/messages/unread/count`);
 }

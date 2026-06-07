@@ -1,10 +1,22 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { listPostsMedia, getRelatedPosts } from "@/lib/api";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { listPostsMedia, getRelatedPosts, type PaginatedPosts } from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
 import LoopMixViewer from "@/components/LoopMixViewer";
 import { Loader2 } from "lucide-react";
+
+const PAGE_SIZE = 20;
+const MAX_MEDIA_PAGES = 10;
+
+function hasNextMediaPage(data: PaginatedPosts, requestedPage: number) {
+  const pageNumber = data.page?.number ?? data.number ?? requestedPage;
+  const totalPages = data.page?.totalPages ?? data.totalPages;
+
+  if (typeof data.last === "boolean") return !data.last;
+  if (typeof totalPages === "number") return pageNumber + 1 < totalPages;
+  return data.content.length >= PAGE_SIZE;
+}
 
 export default function LoopMixPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -13,16 +25,17 @@ export default function LoopMixPage() {
   const [error, setError] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const loadingMoreRef = useRef(false);
 
   const fetchPosts = useCallback(async (nextPage: number) => {
-    const data = await listPostsMedia("ALL", nextPage, 20);
+    const data = await listPostsMedia("ALL", nextPage, PAGE_SIZE);
     const mapped = data.content.map(mapFeedPost);
     if (nextPage === 0) {
       setPosts(mapped);
     } else {
       setPosts((prev) => [...prev, ...mapped]);
     }
-    setHasMore(!data.last);
+    setHasMore(hasNextMediaPage(data, nextPage) && nextPage < MAX_MEDIA_PAGES - 1);
     setPage(nextPage);
   }, []);
 
@@ -35,11 +48,13 @@ export default function LoopMixPage() {
   }, [fetchPosts]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
+    if (loadingMoreRef.current || loadingMore || !hasMore || page >= MAX_MEDIA_PAGES - 1) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     try {
       await fetchPosts(page + 1);
     } catch {} finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
   }, [fetchPosts, loadingMore, hasMore, page]);
@@ -84,7 +99,13 @@ export default function LoopMixPage() {
         #top-nav { display: none !important; }
       `}</style>
 
-      <LoopMixViewer posts={posts} onLoadMore={loadMore} onLoadRelated={loadRelated} />
+      <LoopMixViewer
+        posts={posts}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        onLoadMore={loadMore}
+        onLoadRelated={loadRelated}
+      />
     </div>
   );
 }

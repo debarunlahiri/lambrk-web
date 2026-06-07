@@ -7,11 +7,19 @@ import type { Post } from "@/lib/data";
 
 interface LoopMixViewerProps {
   posts: Post[];
+  hasMore?: boolean;
+  loadingMore?: boolean;
   onLoadMore?: () => void;
   onLoadRelated?: (postId: string) => void;
 }
 
-export default function LoopMixViewer({ posts, onLoadMore, onLoadRelated }: LoopMixViewerProps) {
+export default function LoopMixViewer({
+  posts,
+  hasMore = true,
+  loadingMore = false,
+  onLoadMore,
+  onLoadRelated,
+}: LoopMixViewerProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -57,28 +65,30 @@ export default function LoopMixViewer({ posts, onLoadMore, onLoadRelated }: Loop
     return () => observer.disconnect();
   }, [posts]);
 
-  // Infinite scroll: trigger when last 3 items become visible
+  // Infinite scroll: trigger once when the last item becomes visible.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !onLoadMore) return;
+    if (!container || !onLoadMore || !hasMore || loadingMore) return;
 
-    const sentinel = itemRefs.current[posts.length - 3] || itemRefs.current[posts.length - 1];
+    const sentinel = itemRefs.current[posts.length - 1];
     if (!sentinel) return;
 
     const sentinelObserver = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
           if (entry.isIntersecting) {
+            sentinelObserver.unobserve(entry.target);
             onLoadMore();
+            break;
           }
         }
       },
-      { root: container, threshold: 0 }
+      { root: container, threshold: 0.6 }
     );
 
     sentinelObserver.observe(sentinel);
     return () => sentinelObserver.disconnect();
-  }, [posts.length, onLoadMore]);
+  }, [hasMore, loadingMore, posts.length, onLoadMore]);
 
   // Load related when at the very end
   useEffect(() => {

@@ -33,7 +33,6 @@ import {
 import { mapFeedPost, type Post } from "@/lib/data";
 import PostCard from "@/components/PostCard";
 import { useToast } from "@/contexts/ToastContext";
-import SocialListDialog, { type SocialListKind } from "@/components/SocialListDialog";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -67,7 +66,6 @@ export default function UserProfilePage() {
   });
   const [followLoading, setFollowLoading] = useState(false);
   const [friendLoading, setFriendLoading] = useState(false);
-  const [socialList, setSocialList] = useState<SocialListKind | null>(null);
 
   const isOwnProfile = currentUser?.username === username;
   const isFriend = friendStatus === "ACCEPTED";
@@ -455,50 +453,39 @@ export default function UserProfilePage() {
             <strong className="text-foreground">{posts.length}</strong>
             <span className="text-muted">Posts</span>
           </span>
-          <button
-            onClick={() => canViewFollowerList && setSocialList("followers")}
-            disabled={!canViewFollowerList}
-            className="flex items-center gap-1 transition-colors enabled:hover:text-accent disabled:cursor-not-allowed"
+          <Link
+            href={`/user/${encodeURIComponent(profile.username)}/social?tab=followers`}
+            className={`flex items-center gap-1 transition-colors ${
+              canViewFollowerList ? "hover:text-accent" : "pointer-events-none cursor-not-allowed opacity-60"
+            }`}
+            aria-disabled={!canViewFollowerList}
           >
             <strong className="text-foreground">{canViewFollowerCount ? counts.followers : "—"}</strong>
             <span className="text-muted">Followers</span>
-          </button>
-          <button
-            onClick={() => canViewFollowingList && setSocialList("following")}
-            disabled={!canViewFollowingList}
-            className="flex items-center gap-1 transition-colors enabled:hover:text-accent disabled:cursor-not-allowed"
+          </Link>
+          <Link
+            href={`/user/${encodeURIComponent(profile.username)}/social?tab=following`}
+            className={`flex items-center gap-1 transition-colors ${
+              canViewFollowingList ? "hover:text-accent" : "pointer-events-none cursor-not-allowed opacity-60"
+            }`}
+            aria-disabled={!canViewFollowingList}
           >
             <strong className="text-foreground">{canViewFollowingCount ? counts.following : "—"}</strong>
             <span className="text-muted">Following</span>
-          </button>
-          <button
-            onClick={() => setSocialList("friends")}
+          </Link>
+          <Link
+            href={`/user/${encodeURIComponent(profile.username)}/social?tab=friends`}
             className="flex items-center gap-1 transition-colors hover:text-accent"
           >
             <strong className="text-foreground">{counts.friends}</strong>
             <span className="text-muted">Friends</span>
-          </button>
+          </Link>
           <span className="flex items-center gap-1">
             <strong className="text-foreground">{mediaPosts.length}</strong>
             <span className="text-muted">Media</span>
           </span>
         </div>
       </div>
-
-      <SocialListDialog
-        open={socialList !== null}
-        kind={socialList ?? "followers"}
-        userId={profile.id}
-        username={profile.username}
-        canView={
-          socialList === "followers"
-            ? canViewFollowerList
-            : socialList === "following"
-              ? canViewFollowingList
-              : true
-        }
-        onClose={() => setSocialList(null)}
-      />
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-2xl bg-surface p-1">

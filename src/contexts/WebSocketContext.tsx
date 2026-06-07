@@ -12,20 +12,18 @@ import {
 } from "react";
 import { Client } from "@stomp/stompjs";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  getUnreadNotificationCount,
+  type NotificationResponse,
+} from "@/lib/api";
 
-export interface WsNotification {
-  id?: number;
-  type?: string;
-  message?: string;
-  body?: string;
-  createdAt?: string;
-  isRead?: boolean;
-}
+export type WsNotification = NotificationResponse;
 
 interface WebSocketContextValue {
   isConnected: boolean;
   unreadCount: number;
   notifications: WsNotification[];
+  refreshUnreadCount: () => Promise<void>;
   subscribeToPost: (postId: number) => void;
   unsubscribeFromPost: (postId: number) => void;
 }
@@ -40,12 +38,68 @@ export function useWebSocket() {
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:9500/ws";
 
+function normalizeNotification(data: unknown): WsNotification {
+  if (typeof data === "object" && data !== null) {
+    const raw = data as Partial<NotificationResponse> & { body?: string };
+    return {
+      id: raw.id ?? `ws-${Date.now()}`,
+      type: raw.type ?? "SYSTEM_ANNOUNCEMENT",
+      recipientId: raw.recipientId ?? "",
+      title: raw.title ?? "New notification",
+      message: raw.message ?? raw.body ?? "New notification",
+      relatedPostId: raw.relatedPostId ?? null,
+      relatedPostTitle: raw.relatedPostTitle ?? null,
+      relatedCommentId: raw.relatedCommentId ?? null,
+      relatedCommentPreview: raw.relatedCommentPreview ?? null,
+      relatedUserId: raw.relatedUserId ?? null,
+      relatedUsername: raw.relatedUsername ?? null,
+      actionUrl: raw.actionUrl ?? null,
+      actionText: raw.actionText ?? null,
+      isRead: raw.isRead ?? false,
+      createdAt: raw.createdAt ?? new Date().toISOString(),
+      readAt: raw.readAt ?? null,
+    };
+  }
+
+  return {
+    id: `ws-${Date.now()}`,
+    type: "SYSTEM_ANNOUNCEMENT",
+    recipientId: "",
+    title: "New notification",
+    message: String(data || "New notification"),
+    relatedPostId: null,
+    relatedPostTitle: null,
+    relatedCommentId: null,
+    relatedCommentPreview: null,
+    relatedUserId: null,
+    relatedUsername: null,
+    actionUrl: null,
+    actionText: null,
+    isRead: false,
+    createdAt: new Date().toISOString(),
+    readAt: null,
+  };
+}
+
 export default function WebSocketProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, user } = useAuth();
   const clientRef = useRef<Client | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<WsNotification[]>([]);
+
+  const refreshUnreadCount = useCallback(async () => {
+    if (!isAuthenticated) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const count = await getUnreadNotificationCount();
+      setUnreadCount(count);
+    } catch {
+      // The live unread-count queue remains the fallback when the REST count is unavailable.
+    }
+  }, [isAuthenticated]);
 
   const subscribeToPost = useCallback((postId: number) => {
     const client = clientRef.current;
@@ -61,6 +115,13 @@ export default function WebSocketProvider({ children }: { children: ReactNode })
     if (!client) return;
     client.unsubscribe(`/user/queue/post/${postId}/subscribed`);
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    queueMicrotask(() => {
+      void refreshUnreadCount();
+    });
+  }, [isAuthenticated, refreshUnreadCount]);
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -99,16 +160,18 @@ export default function WebSocketProvider({ children }: { children: ReactNode })
         try {
           const data = JSON.parse(msg.body);
           if (Array.isArray(data)) {
-            setNotifications(data);
+            const normalized = data.map(normalizeNotification);
+            setNotifications(normalized);
+            setUnreadCount(normalized.filter((item) => !item.isRead).length);
           } else {
-            setNotifications((prev) => [data, ...prev]);
+            const normalized = normalizeNotification(data);
+            setNotifications((prev) => [normalized, ...prev]);
+            if (!normalized.isRead) setUnreadCount((count) => count + 1);
           }
         } catch {
-          // plain text notification
-          setNotifications((prev) => [
-            { message: msg.body, createdAt: new Date().toISOString() },
-            ...prev,
-          ]);
+          const normalized = normalizeNotification(msg.body);
+          setNotifications((prev) => [normalized, ...prev]);
+          setUnreadCount((count) => count + 1);
         }
       });
 
@@ -152,8 +215,10 @@ export default function WebSocketProvider({ children }: { children: ReactNode })
   // Clear state on logout
   useEffect(() => {
     if (!isAuthenticated) {
-      setNotifications([]);
-      setUnreadCount(0);
+      queueMicrotask(() => {
+        setNotifications([]);
+        setUnreadCount(0);
+      });
     }
   }, [isAuthenticated]);
 
@@ -162,10 +227,11 @@ export default function WebSocketProvider({ children }: { children: ReactNode })
       isConnected,
       unreadCount,
       notifications,
+      refreshUnreadCount,
       subscribeToPost,
       unsubscribeFromPost,
     }),
-    [isConnected, unreadCount, notifications, subscribeToPost, unsubscribeFromPost]
+    [isConnected, unreadCount, notifications, refreshUnreadCount, subscribeToPost, unsubscribeFromPost]
   );
 
   return (

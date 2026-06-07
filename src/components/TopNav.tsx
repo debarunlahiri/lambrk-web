@@ -4,8 +4,7 @@ import { useSyncExternalStore, useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
-import { Search, PenLine, User, Settings, LogOut, Bell, ChevronDown, X } from "lucide-react";
-import { useWebSocket } from "@/contexts/WebSocketContext";
+import { Search, User, Settings, LogOut, ChevronDown, X, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 function useIsClient() {
@@ -20,7 +19,6 @@ export default function TopNav() {
   const router = useRouter();
   const { user, isAuthenticated, logout } = useAuth();
   const isClient = useIsClient();
-  const { unreadCount } = useWebSocket();
 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -91,34 +89,13 @@ export default function TopNav() {
             <span className="flex-1">Profile</span>
           </Link>
           <Link
-            href="/compose"
+            href="/settings/edit-profile"
             onClick={() => setDropdownOpen(false)}
             className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
           >
-            <PenLine size={18} className="text-white/50" />
-            <span className="flex-1">Create Post</span>
+            <Pencil size={18} className="text-white/50" />
+            <span className="flex-1">Edit Profile</span>
           </Link>
-          <Link
-            href="/notifications"
-            onClick={() => setDropdownOpen(false)}
-            className="flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-white/80 transition-colors hover:bg-white/10"
-          >
-            <span className="relative">
-              <Bell size={18} className="text-white/50" />
-              {unreadCount > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-bold text-white">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-            </span>
-            <span className="flex-1">Notifications</span>
-            {unreadCount > 0 && (
-              <span className="text-xs tabular-nums text-white/50">{unreadCount} new</span>
-            )}
-          </Link>
-        </div>
-
-        <div className="border-t border-white/10 py-1.5">
           <Link
             href="/settings"
             onClick={() => setDropdownOpen(false)}
@@ -127,6 +104,9 @@ export default function TopNav() {
             <Settings size={18} className="text-white/50" />
             <span>Settings</span>
           </Link>
+        </div>
+
+        <div className="border-t border-white/10 py-1.5">
           <button
             onClick={() => {
               setDropdownOpen(false);

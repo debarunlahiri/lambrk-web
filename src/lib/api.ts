@@ -36,6 +36,9 @@ export interface AuthResponse {
     isActive: boolean;
     isVerified: boolean;
     karma: number;
+    followerCount?: number;
+    followingCount?: number;
+    friendCount?: number;
     createdAt: string;
     updatedAt: string;
   };
@@ -879,17 +882,29 @@ export interface SearchUser {
   username: string;
   displayName: string;
   avatarUrl: string | null;
+  headerImageUrl?: string | null;
+  location?: string | null;
+  website?: string | null;
   isVerified: boolean;
   karma: number;
   bio: string | null;
   createdAt: string;
-  isFollowing?: boolean;
-  following?: boolean;
   followedByCurrentUser?: boolean;
-  isFriend?: boolean;
-  friends?: boolean;
+  followingCurrentUser?: boolean;
+  friend?: boolean;
   friendshipStatus?: string | null;
-  friendStatus?: string | null;
+  followerCount?: number;
+  followingCount?: number;
+  friendCount?: number;
+  privateAccount?: boolean;
+  canViewFollowerCount?: boolean;
+  canViewFollowingCount?: boolean;
+  canViewFollowerList?: boolean;
+  canViewFollowingList?: boolean;
+  canShowAddFriendButton?: boolean;
+  canShowFollowButton?: boolean;
+  canShowInMutualLists?: boolean;
+  messageButtonEnabled?: boolean;
 }
 
 export interface SearchResponse {
@@ -977,6 +992,124 @@ export async function getTrendingSearches(page = 0, size = 20): Promise<SearchRe
   );
 }
 
+// ─── Notifications ───
+
+export type NotificationType =
+  | "COMMENT_REPLY"
+  | "POST_LIKE"
+  | "COMMENT_LIKE"
+  | "POST_MENTION"
+  | "COMMENT_MENTION"
+  | "USER_FOLLOW"
+  | "FRIEND_REQUEST"
+  | "FRIEND_REQUEST_ACCEPTED"
+  | "COMMUNITY_INVITE"
+  | "MODERATOR_ACTION"
+  | "SYSTEM_ANNOUNCEMENT"
+  | "CONTENT_MODERATION"
+  | string;
+
+export interface NotificationResponse {
+  id: string;
+  type: NotificationType;
+  recipientId: string;
+  title: string;
+  message: string;
+  relatedPostId: string | null;
+  relatedPostTitle: string | null;
+  relatedCommentId: string | null;
+  relatedCommentPreview: string | null;
+  relatedUserId: string | null;
+  relatedUsername: string | null;
+  actionUrl: string | null;
+  actionText: string | null;
+  isRead: boolean;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface PaginatedNotifications {
+  content: NotificationResponse[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}
+
+export interface CreateNotificationRequest {
+  type: NotificationType;
+  recipientId: string;
+  title: string;
+  message: string;
+  relatedPostId?: string | null;
+  relatedCommentId?: string | null;
+  relatedUserId?: string | null;
+  actionUrl?: string | null;
+  actionText?: string | null;
+  isRead?: boolean;
+}
+
+export async function createNotification(data: CreateNotificationRequest): Promise<NotificationResponse> {
+  return fetchJson<NotificationResponse>(`${API_BASE}/api/notifications`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function listNotifications(page = 0, size = 20): Promise<PaginatedNotifications> {
+  return fetchJson<PaginatedNotifications>(
+    `${API_BASE}/api/notifications?page=${page}&size=${size}`
+  );
+}
+
+export async function listUnreadNotifications(page = 0, size = 20): Promise<PaginatedNotifications> {
+  return fetchJson<PaginatedNotifications>(
+    `${API_BASE}/api/notifications/unread?page=${page}&size=${size}`
+  );
+}
+
+export async function listNotificationsByType(
+  type: NotificationType,
+  page = 0,
+  size = 20
+): Promise<PaginatedNotifications> {
+  return fetchJson<PaginatedNotifications>(
+    `${API_BASE}/api/notifications/type/${encodeURIComponent(type)}?page=${page}&size=${size}`
+  );
+}
+
+export async function markNotificationRead(notificationId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/notifications/${notificationId}/read`, {
+    method: "PUT",
+  });
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/notifications/read-all`, {
+    method: "PUT",
+  });
+}
+
+export async function deleteNotification(notificationId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/notifications/${notificationId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteAllNotifications(): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/notifications`, {
+    method: "DELETE",
+  });
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  return fetchJson<number>(`${API_BASE}/api/notifications/count/unread`);
+}
+
 // ─── Users ───
 
 export interface UserProfile {
@@ -992,14 +1125,50 @@ export interface UserProfile {
   isVerified: boolean;
   karma: number;
   createdAt: string;
-  updatedAt: string;
-  isFollowing?: boolean;
-  following?: boolean;
+  updatedAt?: string;
   followedByCurrentUser?: boolean;
-  isFriend?: boolean;
-  friends?: boolean;
+  followingCurrentUser?: boolean;
+  friend?: boolean;
   friendshipStatus?: string | null;
-  friendStatus?: string | null;
+  followerCount?: number;
+  followingCount?: number;
+  friendCount?: number;
+  privateAccount?: boolean;
+  canViewFollowerCount?: boolean;
+  canViewFollowingCount?: boolean;
+  canViewFollowerList?: boolean;
+  canViewFollowingList?: boolean;
+  canShowAddFriendButton?: boolean;
+  canShowFollowButton?: boolean;
+  canShowInMutualLists?: boolean;
+  messageButtonEnabled?: boolean;
+}
+
+export interface UserPrivacySettings {
+  userId: string;
+  privateAccount: boolean;
+  hideFollowerCount: boolean;
+  hideFollowingCount: boolean;
+  hideFollowerList: boolean;
+  hideFollowingList: boolean;
+  hideAddFriendButton: boolean;
+  hideFollowButton: boolean;
+  hideFromMutualList: boolean;
+  messageButtonEnabled: boolean;
+  updatedAt: string;
+}
+
+export type UpdateUserPrivacySettings = Partial<Omit<UserPrivacySettings, "userId" | "updatedAt">>;
+
+export interface FriendRequestResponse {
+  id: string;
+  requester: UserProfile;
+  addressee: UserProfile;
+  status: "PENDING" | "ACCEPTED" | "DECLINED" | "CANCELLED" | "REMOVED" | "BLOCKED" | string;
+  source: string | null;
+  requestMessage: string | null;
+  createdAt: string;
+  respondedAt: string | null;
 }
 
 export interface PaginatedUsers {
@@ -1026,6 +1195,19 @@ export async function getCurrentUser(): Promise<UserProfile> {
   return fetchJson<UserProfile>(`${API_BASE}/api/users/me`);
 }
 
+export async function getUserPrivacySettings(): Promise<UserPrivacySettings> {
+  return fetchJson<UserPrivacySettings>(`${API_BASE}/api/users/me/privacy`);
+}
+
+export async function updateUserPrivacySettings(
+  data: UpdateUserPrivacySettings
+): Promise<UserPrivacySettings> {
+  return fetchJson<UserPrivacySettings>(`${API_BASE}/api/users/me/privacy`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function listTopUsers(page = 0, size = 20): Promise<PaginatedUsers> {
   return fetchJson<PaginatedUsers>(`${API_BASE}/api/users/top?page=${page}&size=${size}`);
 }
@@ -1036,48 +1218,106 @@ export async function searchActiveUsers(query: string, page = 0, size = 20): Pro
   );
 }
 
-async function tryUserAction(candidates: { url: string; init: RequestInit }[]): Promise<void> {
-  let lastError: unknown = null;
-
-  for (const candidate of candidates) {
-    try {
-      await fetchJson<void>(candidate.url, candidate.init);
-      return;
-    } catch (err) {
-      lastError = err;
-      if (err instanceof ApiError && ![404, 405].includes(err.status)) {
-        throw err;
-      }
-    }
-  }
-
-  if (lastError instanceof Error) throw lastError;
-  throw new ApiError({ status: 404, detail: "Action endpoint not found" });
+function userPageUrl(path: string, page = 0, size = 20): string {
+  return `${API_BASE}${path}?page=${page}&size=${size}`;
 }
 
-export async function followUser(userId: string): Promise<void> {
-  await tryUserAction([
-    { url: `${API_BASE}/api/users/${userId}/follow`, init: { method: "POST" } },
-    { url: `${API_BASE}/api/follows/${userId}`, init: { method: "POST" } },
-    { url: `${API_BASE}/api/users/${userId}/followers`, init: { method: "POST" } },
-  ]);
+export async function followUser(userId: string, source = "profile"): Promise<void> {
+  const qs = source ? `?source=${encodeURIComponent(source)}` : "";
+  await fetchJson<void>(`${API_BASE}/api/users/${userId}/follow${qs}`, {
+    method: "POST",
+  });
 }
 
 export async function unfollowUser(userId: string): Promise<void> {
-  await tryUserAction([
-    { url: `${API_BASE}/api/users/${userId}/follow`, init: { method: "DELETE" } },
-    { url: `${API_BASE}/api/users/${userId}/unfollow`, init: { method: "POST" } },
-    { url: `${API_BASE}/api/follows/${userId}`, init: { method: "DELETE" } },
-  ]);
+  await fetchJson<void>(`${API_BASE}/api/users/${userId}/follow`, {
+    method: "DELETE",
+  });
 }
 
-export async function sendFriendRequest(userId: string): Promise<void> {
-  await tryUserAction([
-    { url: `${API_BASE}/api/friends/requests?userId=${encodeURIComponent(userId)}`, init: { method: "POST" } },
-    { url: `${API_BASE}/api/friends/request/${userId}`, init: { method: "POST" } },
-    { url: `${API_BASE}/api/users/${userId}/friend-request`, init: { method: "POST" } },
-    { url: `${API_BASE}/api/friendships/${userId}`, init: { method: "POST" } },
-  ]);
+export async function listUserFollowers(userId: string, page = 0, size = 20): Promise<PaginatedUsers> {
+  return fetchJson<PaginatedUsers>(userPageUrl(`/api/users/${userId}/followers`, page, size));
+}
+
+export async function listUserFollowing(userId: string, page = 0, size = 20): Promise<PaginatedUsers> {
+  return fetchJson<PaginatedUsers>(userPageUrl(`/api/users/${userId}/following`, page, size));
+}
+
+export async function listUserFriends(userId: string, page = 0, size = 20): Promise<PaginatedUsers> {
+  return fetchJson<PaginatedUsers>(userPageUrl(`/api/users/${userId}/friends`, page, size));
+}
+
+export async function getUserSocialStats(userId: string): Promise<{
+  followerCount: number;
+  followingCount: number;
+  friendCount: number;
+}> {
+  return fetchJson(`${API_BASE}/api/users/${userId}/social-stats`);
+}
+
+export async function sendFriendRequest(
+  userId: string,
+  data: { source?: string; message?: string } = { source: "profile" }
+): Promise<FriendRequestResponse> {
+  return fetchJson<FriendRequestResponse>(`${API_BASE}/api/users/${userId}/friend-request`, {
+    method: "POST",
+    body: JSON.stringify({
+      source: data.source ?? "profile",
+      message: data.message,
+    }),
+  });
+}
+
+export async function acceptFriendRequest(userId: string): Promise<FriendRequestResponse> {
+  return fetchJson<FriendRequestResponse>(`${API_BASE}/api/users/${userId}/friend-request/accept`, {
+    method: "POST",
+  });
+}
+
+export async function declineFriendRequest(userId: string): Promise<FriendRequestResponse> {
+  return fetchJson<FriendRequestResponse>(`${API_BASE}/api/users/${userId}/friend-request/decline`, {
+    method: "POST",
+  });
+}
+
+export async function cancelFriendRequest(userId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/users/${userId}/friend-request`, {
+    method: "DELETE",
+  });
+}
+
+export async function removeFriend(userId: string): Promise<void> {
+  await fetchJson<void>(`${API_BASE}/api/users/${userId}/friend`, {
+    method: "DELETE",
+  });
+}
+
+export async function listIncomingFriendRequests(page = 0, size = 20): Promise<{
+  content: FriendRequestResponse[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}> {
+  return fetchJson(`${API_BASE}/api/users/me/friend-requests/incoming?page=${page}&size=${size}`);
+}
+
+export async function listOutgoingFriendRequests(page = 0, size = 20): Promise<{
+  content: FriendRequestResponse[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+  empty: boolean;
+}> {
+  return fetchJson(`${API_BASE}/api/users/me/friend-requests/outgoing?page=${page}&size=${size}`);
 }
 
 export async function deleteUserAccount(userId: string): Promise<void> {

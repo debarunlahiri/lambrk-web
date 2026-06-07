@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -14,8 +14,15 @@ import {
   ChevronRight,
   Loader2,
   AlertTriangle,
+  Users as UsersIcon,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  getUserPrivacySettings,
+  updateUserPrivacySettings,
+  type UpdateUserPrivacySettings,
+  type UserPrivacySettings,
+} from "@/lib/api";
 
 function SettingsRow({
   icon: Icon,
@@ -24,6 +31,7 @@ function SettingsRow({
   onClick,
   right,
   danger,
+  indent = 0,
 }: {
   icon: typeof User;
   label: string;
@@ -31,26 +39,52 @@ function SettingsRow({
   onClick?: () => void;
   right?: React.ReactNode;
   danger?: boolean;
+  indent?: number;
 }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-surface ${
-        danger ? "text-red-500 hover:bg-red-500/5" : ""
-      }`}
-    >
+  const indentClass = indent === 2 ? "pl-20" : indent === 1 ? "pl-12" : "";
+  const content = (
+    <>
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
         danger ? "bg-red-500/10" : "bg-surface"
       }`}>
         <Icon size={20} />
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-bold">{label}</p>
         {description && (
           <p className="text-xs text-muted">{description}</p>
         )}
       </div>
-      {right || <ChevronRight size={16} className="text-muted shrink-0" />}
+      <div className="ml-auto flex shrink-0 items-center justify-end">
+        {right || <ChevronRight size={16} className="text-muted" />}
+      </div>
+    </>
+  );
+
+  if (!onClick) {
+    return (
+      <div
+        className={`flex w-full items-center gap-4 px-4 py-3.5 text-left ${
+          indentClass
+        } ${
+          danger ? "text-red-500" : ""
+        }`}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-4 px-4 py-3.5 text-left transition-colors hover:bg-surface ${
+        indentClass
+      } ${
+        danger ? "text-red-500 hover:bg-red-500/5" : ""
+      }`}
+    >
+      {content}
     </button>
   );
 }
@@ -59,14 +93,16 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 shrink-0 rounded-full transition-colors ${
+      className={`inline-flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition-colors ${
         checked ? "bg-accent" : "bg-border"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
-          checked ? "translate-x-[18px]" : "translate-x-[2px]"
+        className={`h-6 w-6 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-5" : "translate-x-0"
         }`}
       />
     </button>
@@ -82,12 +118,88 @@ export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
+  const [privacySettings, setPrivacySettings] = useState<UserPrivacySettings | null>(null);
+  const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [privacySaving, setPrivacySaving] = useState<string | null>(null);
+  const [privacyError, setPrivacyError] = useState("");
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== "undefined") {
       return window.matchMedia("(prefers-color-scheme: dark)").matches;
     }
     return false;
   });
+
+  useEffect(() => {
+    if (activeSection !== "privacy") return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setPrivacyLoading(true);
+        setPrivacyError("");
+      }
+    });
+
+    getUserPrivacySettings()
+      .then((settings) => {
+        if (!cancelled) setPrivacySettings(settings);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setPrivacyError(err instanceof Error ? err.message : "Failed to load privacy settings");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPrivacyLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSection]);
+
+  const updatePrivacy = async (key: keyof UpdateUserPrivacySettings, value: boolean) => {
+    if (!privacySettings || privacySaving) return;
+
+    const previous = privacySettings;
+    setPrivacySaving(key);
+    setPrivacyError("");
+    const patch: UpdateUserPrivacySettings =
+      key === "hideFollowerCount"
+        ? { hideFollowerCount: value, hideFollowerList: value }
+        : key === "hideFollowerList"
+          ? { hideFollowerCount: value, hideFollowerList: value }
+        : key === "hideFollowingCount"
+          ? { hideFollowingCount: value, hideFollowingList: value }
+          : key === "hideFollowingList"
+            ? { hideFollowingCount: value, hideFollowingList: value }
+            : { [key]: value };
+    const optimistic =
+      key === "privateAccount"
+        ? {
+            ...privacySettings,
+            privateAccount: value,
+            hideFollowerCount: value,
+            hideFollowingCount: value,
+            hideFollowerList: value,
+            hideFollowingList: value,
+            hideAddFriendButton: value,
+            hideFollowButton: value,
+            hideFromMutualList: value,
+            messageButtonEnabled: !value,
+          }
+        : { ...privacySettings, ...patch };
+    setPrivacySettings(optimistic);
+
+    try {
+      const updated = await updateUserPrivacySettings(patch);
+      setPrivacySettings(updated);
+    } catch (err: unknown) {
+      setPrivacySettings(previous);
+      setPrivacyError(err instanceof Error ? err.message : "Failed to update privacy setting");
+    } finally {
+      setPrivacySaving(null);
+    }
+  };
 
   if (activeSection === "notifications") {
     return (
@@ -165,6 +277,142 @@ export default function SettingsPage() {
           />
           <div className="border-b border-border px-4 py-3">
             <p className="text-xs font-bold text-muted uppercase tracking-wide">
+              Profile Privacy
+            </p>
+          </div>
+          {privacyLoading && (
+            <div className="flex items-center gap-2 px-4 py-4 text-sm text-muted">
+              <Loader2 size={16} className="animate-spin" />
+              Loading privacy settings...
+            </div>
+          )}
+          {privacyError && (
+            <div className="px-4 py-3 text-sm text-red-500">
+              {privacyError}
+            </div>
+          )}
+          {privacySettings && (
+            <>
+              <SettingsRow
+                icon={Shield}
+                label="Private account"
+                description="Preset: hides counts, lists, follow/friend actions, mutual lists, and messages"
+                right={
+                  privacySaving === "privateAccount" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.privateAccount} onChange={(value) => updatePrivacy("privateAccount", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={User}
+                label="Hide follower count"
+                description="Mask follower count for other viewers"
+                indent={1}
+                right={
+                  privacySaving === "hideFollowerCount" || privacySaving === "hideFollowerList" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideFollowerCount} onChange={(value) => updatePrivacy("hideFollowerCount", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={User}
+                label="Hide followers list"
+                description="Return an empty followers list for other viewers"
+                indent={2}
+                right={
+                  privacySaving === "hideFollowerCount" || privacySaving === "hideFollowerList" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideFollowerList} onChange={(value) => updatePrivacy("hideFollowerList", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={User}
+                label="Hide following count"
+                description="Mask following count for other viewers"
+                indent={1}
+                right={
+                  privacySaving === "hideFollowingCount" || privacySaving === "hideFollowingList" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideFollowingCount} onChange={(value) => updatePrivacy("hideFollowingCount", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={User}
+                label="Hide following list"
+                description="Return an empty following list for other viewers"
+                indent={2}
+                right={
+                  privacySaving === "hideFollowingCount" || privacySaving === "hideFollowingList" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideFollowingList} onChange={(value) => updatePrivacy("hideFollowingList", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={User}
+                label="Hide add friend button"
+                description="Disable friend requests to your profile"
+                indent={1}
+                right={
+                  privacySaving === "hideAddFriendButton" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideAddFriendButton} onChange={(value) => updatePrivacy("hideAddFriendButton", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={User}
+                label="Hide follow button"
+                description="Disable follow actions to your profile"
+                indent={1}
+                right={
+                  privacySaving === "hideFollowButton" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideFollowButton} onChange={(value) => updatePrivacy("hideFollowButton", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={UsersIcon}
+                label="Hide from mutual lists"
+                description="Exclude your account from mutual follower and friend lists"
+                indent={1}
+                right={
+                  privacySaving === "hideFromMutualList" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.hideFromMutualList} onChange={(value) => updatePrivacy("hideFromMutualList", value)} />
+                  )
+                }
+              />
+              <SettingsRow
+                icon={Bell}
+                label="Message button"
+                description="Show or hide the message button on your profile"
+                indent={1}
+                right={
+                  privacySaving === "messageButtonEnabled" ? (
+                    <Loader2 size={16} className="animate-spin text-muted" />
+                  ) : (
+                    <Switch checked={privacySettings.messageButtonEnabled} onChange={(value) => updatePrivacy("messageButtonEnabled", value)} />
+                  )
+                }
+              />
+            </>
+          )}
+          <div className="border-b border-border px-4 py-3">
+            <p className="text-xs font-bold text-muted uppercase tracking-wide">
               Data &amp; Privacy
             </p>
           </div>
@@ -236,7 +484,7 @@ export default function SettingsPage() {
       {/* Account info */}
       <div className="overflow-hidden rounded-3xl bg-card shadow-sm ring-1 ring-border">
         <div
-          className="h-16 w-full bg-gradient-to-br from-accent/30 to-accent-2/30"
+          className="h-28 w-full bg-gradient-to-br from-accent/30 to-accent-2/30 sm:h-32"
           style={
             user?.headerImageUrl
               ? { backgroundImage: `url(${user.headerImageUrl})`, backgroundSize: "cover", backgroundPosition: "center" }

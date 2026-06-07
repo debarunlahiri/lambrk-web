@@ -26,6 +26,10 @@ import {
   followUser,
   unfollowUser,
   sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  cancelFriendRequest,
+  removeFriend,
   type SearchResponse,
   type SearchUser,
   type Community,
@@ -49,11 +53,16 @@ const tabs: { key: SearchTab; label: string; icon: typeof FileText }[] = [
 function UserCard({ user }: { user: SearchUser }) {
   const { user: currentUser, isAuthenticated } = useAuth();
   const { show: showToast } = useToast();
-  const [following, setFollowing] = useState(
-    user.isFollowing ?? user.following ?? user.followedByCurrentUser ?? false
-  );
+  const [following, setFollowing] = useState(user.followedByCurrentUser ?? false);
   const [friendStatus, setFriendStatus] = useState(
-    (user.friendshipStatus ?? user.friendStatus ?? (user.isFriend || user.friends ? "FRIENDS" : "NONE")).toUpperCase()
+    (user.friendshipStatus ?? (user.friend ? "ACCEPTED" : "NONE")).toUpperCase()
+  );
+  const [counts, setCounts] = useState(
+    {
+      followers: user.followerCount ?? 0,
+      following: user.followingCount ?? 0,
+      friends: user.friendCount ?? 0,
+    }
   );
   const [followLoading, setFollowLoading] = useState(false);
   const [friendLoading, setFriendLoading] = useState(false);
@@ -65,8 +74,12 @@ function UserCard({ user }: { user: SearchUser }) {
     .slice(0, 2)
     .toUpperCase() || "??";
   const isOwnUser = currentUser?.username === user.username || currentUser?.id === user.id;
-  const isFriend = friendStatus === "FRIENDS" || friendStatus === "ACCEPTED";
-  const isFriendPending = ["PENDING", "REQUESTED", "SENT"].includes(friendStatus);
+  const isFriend = friendStatus === "ACCEPTED";
+  const isFriendPending = friendStatus === "PENDING";
+  const requestFromUser = isFriendPending && user.followingCurrentUser;
+  const canShowFollowButton = user.canShowFollowButton ?? true;
+  const canShowAddFriendButton = user.canShowAddFriendButton ?? true;
+  const canViewFollowerCount = user.canViewFollowerCount ?? true;
 
   const requireAuth = (action: string) => {
     if (isAuthenticated) return true;
@@ -80,34 +93,62 @@ function UserCard({ user }: { user: SearchUser }) {
 
     const next = !following;
     setFollowing(next);
+    setCounts((current) => ({
+      ...current,
+      followers: Math.max(0, current.followers + (next ? 1 : -1)),
+    }));
     setFollowLoading(true);
 
     try {
       if (next) {
-        await followUser(user.id);
+        await followUser(user.id, "search");
       } else {
         await unfollowUser(user.id);
       }
       showToast(next ? "Following user" : "Unfollowed user", "success");
     } catch (err: unknown) {
       setFollowing(!next);
+      setCounts((current) => ({
+        ...current,
+        followers: Math.max(0, current.followers + (next ? -1 : 1)),
+      }));
       showToast(err instanceof Error ? err.message : "Failed to update follow", "error");
     } finally {
       setFollowLoading(false);
     }
   };
 
-  const handleFriendRequest = async () => {
-    if (!requireAuth("add friends")) return;
-    if (friendLoading || isFriend || isFriendPending) return;
+  const handleFriendAction = async (action: "send" | "accept" | "decline" | "cancel" | "remove") => {
+    if (!requireAuth("manage friends")) return;
+    if (friendLoading) return;
 
     const previous = friendStatus;
-    setFriendStatus("PENDING");
     setFriendLoading(true);
 
     try {
-      await sendFriendRequest(user.id);
-      showToast("Friend request sent", "success");
+      if (action === "remove") {
+        setFriendStatus("NONE");
+        setCounts((current) => ({ ...current, friends: Math.max(0, current.friends - 1) }));
+        await removeFriend(user.id);
+        showToast("Friend removed", "success");
+      } else if (action === "accept") {
+        setFriendStatus("ACCEPTED");
+        setCounts((current) => ({ ...current, friends: current.friends + 1 }));
+        await acceptFriendRequest(user.id);
+        showToast("Friend request accepted", "success");
+      } else if (action === "decline") {
+        setFriendStatus("NONE");
+        await declineFriendRequest(user.id);
+        showToast("Friend request declined", "success");
+      } else if (action === "cancel") {
+        setFriendStatus("NONE");
+        await cancelFriendRequest(user.id);
+        showToast("Friend request cancelled", "success");
+      } else {
+        setFriendStatus("PENDING");
+        await sendFriendRequest(user.id, { source: "search" });
+        showToast("Friend request sent", "success");
+      }
     } catch (err: unknown) {
       setFriendStatus(previous);
       showToast(err instanceof Error ? err.message : "Failed to send friend request", "error");
@@ -144,35 +185,59 @@ function UserCard({ user }: { user: SearchUser }) {
           {user.bio && (
             <p className="text-xs text-muted truncate mt-0.5">{user.bio}</p>
           )}
-          {user.karma > 0 && <p className="mt-0.5 text-xs text-muted">{user.karma} karma</p>}
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+            {user.karma > 0 && <span>{user.karma} karma</span>}
+            <span>{canViewFollowerCount ? counts.followers : "—"} followers</span>
+            <span>{counts.friends} friends</span>
+          </div>
         </div>
       </Link>
 
       {!isOwnUser && (
         <div className="flex flex-wrap gap-2 sm:justify-end">
-          <button
-            onClick={handleFollow}
-            disabled={followLoading}
-            className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition-all disabled:opacity-60 ${
-              following
-                ? "bg-surface text-foreground ring-1 ring-border hover:bg-border"
-                : "bg-foreground text-background hover:opacity-80"
-            }`}
-          >
-            {followLoading ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
-            {following ? "Unfollow" : "Follow"}
-          </button>
-
-          {!isFriend && (
+          {(canShowFollowButton || following) && (
             <button
-              onClick={handleFriendRequest}
-              disabled={friendLoading || isFriendPending}
-              className="flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-xs font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+              onClick={handleFollow}
+              disabled={followLoading}
+              className={`flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold transition-all disabled:opacity-60 ${
+                following
+                  ? "bg-surface text-foreground ring-1 ring-border hover:bg-border"
+                  : "bg-foreground text-background hover:opacity-80"
+              }`}
             >
-              {friendLoading ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
-              {isFriendPending ? "Request sent" : "Add Friend"}
+              {followLoading ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+              {following ? "Unfollow" : "Follow"}
             </button>
           )}
+
+          {requestFromUser ? (
+            <>
+              <button
+                onClick={() => handleFriendAction("accept")}
+                disabled={friendLoading}
+                className="flex h-9 items-center gap-1.5 rounded-full bg-accent px-3 text-xs font-bold text-white transition-all hover:opacity-80 disabled:opacity-60"
+              >
+                {friendLoading ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                Accept
+              </button>
+              <button
+                onClick={() => handleFriendAction("decline")}
+                disabled={friendLoading}
+                className="flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-xs font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+              >
+                Decline
+              </button>
+            </>
+          ) : (canShowAddFriendButton || isFriend || isFriendPending) ? (
+            <button
+              onClick={() => handleFriendAction(isFriend ? "remove" : isFriendPending ? "cancel" : "send")}
+              disabled={friendLoading}
+              className="flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-xs font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+            >
+              {friendLoading ? <Loader2 size={14} className="animate-spin" /> : isFriend ? <UserCheck size={14} /> : <UserPlus size={14} />}
+              {isFriend ? "Friends" : isFriendPending ? "Cancel request" : "Add Friend"}
+            </button>
+          ) : null}
 
           {isFriend && (
             <Link

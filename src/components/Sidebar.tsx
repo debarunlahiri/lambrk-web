@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useWebSocket } from "@/contexts/WebSocketContext";
 import {
   Home,
   Bell,
   User,
+  MessageCircle,
   LogIn,
   PenLine,
   TrendingUp,
@@ -20,6 +22,7 @@ interface NavItem {
   icon: React.ElementType;
   authOnly?: boolean;
   guestOnly?: boolean;
+  badge?: number;
 }
 
 const HIDDEN_PATHS = ["/login", "/register"];
@@ -27,6 +30,7 @@ const HIDDEN_PATHS = ["/login", "/register"];
 export default function Sidebar() {
   const pathname = usePathname();
   const { isAuthenticated } = useAuth();
+  const { unreadCount } = useWebSocket();
 
   // Hide sidebar on auth pages
   if (HIDDEN_PATHS.includes(pathname)) return null;
@@ -36,7 +40,8 @@ export default function Sidebar() {
     { name: "LoopMix", href: "/loopmix", icon: LoopMixIcon },
     { name: "Hot", href: "/hot", icon: TrendingUp, guestOnly: true },
     { name: "Bookmarks", href: "/bookmarks", icon: Bookmark, authOnly: true },
-    { name: "Notifications", href: "/notifications", icon: Bell, authOnly: true },
+    { name: "Notifications", href: "/notifications", icon: Bell, authOnly: true, badge: unreadCount },
+    { name: "Messages", href: "/messages", icon: MessageCircle, authOnly: true },
     { name: "Profile", href: "/profile", icon: User, authOnly: true },
     { name: "Sign In", href: "/login", icon: LogIn, guestOnly: true },
   ];
@@ -74,10 +79,20 @@ export default function Sidebar() {
                   : "text-white/60 hover:bg-white/10 hover:text-white"
               }`}
             >
-              <div className="flex h-7 w-7 items-center justify-center shrink-0">
+              <div className="relative flex h-7 w-7 items-center justify-center shrink-0">
                 <Icon size={22} strokeWidth={isActive ? 2.5 : 1.5} />
+                {item.badge !== undefined && item.badge > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-black leading-none text-white ring-2 ring-black">
+                    {item.badge > 99 ? "99+" : item.badge}
+                  </span>
+                )}
               </div>
               <span className="hidden lg:block text-[15px]">{item.name}</span>
+              {item.badge !== undefined && item.badge > 0 && (
+                <span className="ml-auto hidden text-sm tabular-nums text-white/50 lg:block">
+                  {item.badge > 99 ? "99+" : item.badge} new
+                </span>
+              )}
             </Link>
           );
         })}

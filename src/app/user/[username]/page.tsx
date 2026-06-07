@@ -22,11 +22,18 @@ import {
   followUser,
   unfollowUser,
   sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+  cancelFriendRequest,
+  removeFriend,
+  listIncomingFriendRequests,
+  listOutgoingFriendRequests,
   type UserProfile,
 } from "@/lib/api";
 import { mapFeedPost, type Post } from "@/lib/data";
 import PostCard from "@/components/PostCard";
 import { useToast } from "@/contexts/ToastContext";
+import SocialListDialog, { type SocialListKind } from "@/components/SocialListDialog";
 
 function formatDate(dateString: string): string {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -36,6 +43,7 @@ function formatDate(dateString: string): string {
 }
 
 const tabs = ["Posts", "Media"];
+type FriendRequestDirection = "incoming" | "outgoing" | null;
 
 export default function UserProfilePage() {
   const params = useParams();
@@ -51,12 +59,28 @@ export default function UserProfilePage() {
   const [activeTab, setActiveTab] = useState("Posts");
   const [following, setFollowing] = useState(false);
   const [friendStatus, setFriendStatus] = useState("NONE");
+  const [friendRequestDirection, setFriendRequestDirection] = useState<FriendRequestDirection>(null);
+  const [counts, setCounts] = useState({
+    followers: 0,
+    following: 0,
+    friends: 0,
+  });
   const [followLoading, setFollowLoading] = useState(false);
   const [friendLoading, setFriendLoading] = useState(false);
+  const [socialList, setSocialList] = useState<SocialListKind | null>(null);
 
   const isOwnProfile = currentUser?.username === username;
-  const isFriend = friendStatus === "FRIENDS" || friendStatus === "ACCEPTED";
-  const isFriendPending = ["PENDING", "REQUESTED", "SENT"].includes(friendStatus);
+  const isFriend = friendStatus === "ACCEPTED";
+  const isFriendPending = friendStatus === "PENDING";
+  const requestFromProfile = isFriendPending && friendRequestDirection === "incoming";
+  const requestToProfile = isFriendPending && friendRequestDirection === "outgoing";
+  const canViewFollowerCount = profile?.canViewFollowerCount ?? true;
+  const canViewFollowingCount = profile?.canViewFollowingCount ?? true;
+  const canViewFollowerList = profile?.canViewFollowerList ?? true;
+  const canViewFollowingList = profile?.canViewFollowingList ?? true;
+  const canShowFollowButton = profile?.canShowFollowButton ?? true;
+  const canShowAddFriendButton = profile?.canShowAddFriendButton ?? true;
+  const canShowMessageButton = profile?.messageButtonEnabled ?? true;
   const avatarText = profile?.displayName
     ? profile.displayName
         .split(" ")
@@ -69,17 +93,38 @@ export default function UserProfilePage() {
   useEffect(() => {
     if (!username) return;
     let cancelled = false;
-    setLoading(true);
-    setError("");
+    queueMicrotask(() => {
+      if (!cancelled) {
+        setLoading(true);
+        setError("");
+      }
+    });
 
     getUserByUsername(username)
-      .then((data) => {
+      .then(async (data) => {
         if (cancelled) return;
         setProfile(data);
-        setFollowing(data.isFollowing ?? data.following ?? data.followedByCurrentUser ?? false);
-        setFriendStatus(
-          (data.friendshipStatus ?? data.friendStatus ?? (data.isFriend || data.friends ? "FRIENDS" : "NONE")).toUpperCase()
-        );
+        setFollowing(data.followedByCurrentUser ?? false);
+        const nextFriendStatus = (data.friendshipStatus ?? (data.friend ? "ACCEPTED" : "NONE")).toUpperCase();
+        setFriendStatus(nextFriendStatus);
+        setFriendRequestDirection(null);
+        setCounts({
+          followers: data.followerCount ?? 0,
+          following: data.followingCount ?? 0,
+          friends: data.friendCount ?? 0,
+        });
+
+        if (isAuthenticated && nextFriendStatus === "PENDING") {
+          const [incoming, outgoing] = await Promise.all([
+            listIncomingFriendRequests(0, 50).catch(() => null),
+            listOutgoingFriendRequests(0, 50).catch(() => null),
+          ]);
+          if (cancelled) return;
+          const hasIncoming = incoming?.content.some((request) => request.requester.id === data.id);
+          const hasOutgoing = outgoing?.content.some((request) => request.addressee.id === data.id);
+          setFriendRequestDirection(hasIncoming ? "incoming" : hasOutgoing ? "outgoing" : null);
+        }
+
         setLoading(false);
       })
       .catch((err: unknown) => {
@@ -91,12 +136,14 @@ export default function UserProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [username]);
+  }, [isAuthenticated, username]);
 
   useEffect(() => {
     if (!profile) return;
     let cancelled = false;
-    setPostsLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) setPostsLoading(true);
+    });
 
     listUserPosts(profile.id, 0, 30)
       .then((data) => {
@@ -125,6 +172,10 @@ export default function UserProfilePage() {
 
     const next = !following;
     setFollowing(next);
+    setCounts((current) => ({
+      ...current,
+      followers: Math.max(0, current.followers + (next ? 1 : -1)),
+    }));
     setFollowLoading(true);
 
     try {
@@ -136,25 +187,56 @@ export default function UserProfilePage() {
       showToast(next ? "Following user" : "Unfollowed user", "success");
     } catch (err: unknown) {
       setFollowing(!next);
+      setCounts((current) => ({
+        ...current,
+        followers: Math.max(0, current.followers + (next ? -1 : 1)),
+      }));
       showToast(err instanceof Error ? err.message : "Failed to update follow", "error");
     } finally {
       setFollowLoading(false);
     }
   };
 
-  const handleFriendRequest = async () => {
-    if (!profile || !requireAuth("add friends")) return;
-    if (friendLoading || isFriend || isFriendPending) return;
+  const handleFriendAction = async (action: "send" | "accept" | "decline" | "cancel" | "remove") => {
+    if (!profile || !requireAuth("manage friends")) return;
+    if (friendLoading) return;
 
     const previous = friendStatus;
-    setFriendStatus("PENDING");
+    const previousDirection = friendRequestDirection;
     setFriendLoading(true);
 
     try {
-      await sendFriendRequest(profile.id);
-      showToast("Friend request sent", "success");
+      if (action === "remove") {
+        setFriendStatus("NONE");
+        setFriendRequestDirection(null);
+        setCounts((current) => ({ ...current, friends: Math.max(0, current.friends - 1) }));
+        await removeFriend(profile.id);
+        showToast("Friend removed", "success");
+      } else if (action === "accept") {
+        setFriendStatus("ACCEPTED");
+        setFriendRequestDirection(null);
+        setCounts((current) => ({ ...current, friends: current.friends + 1 }));
+        await acceptFriendRequest(profile.id);
+        showToast("Friend request accepted", "success");
+      } else if (action === "decline") {
+        setFriendStatus("NONE");
+        setFriendRequestDirection(null);
+        await declineFriendRequest(profile.id);
+        showToast("Friend request declined", "success");
+      } else if (action === "cancel") {
+        setFriendStatus("NONE");
+        setFriendRequestDirection(null);
+        await cancelFriendRequest(profile.id);
+        showToast("Friend request cancelled", "success");
+      } else {
+        setFriendStatus("PENDING");
+        setFriendRequestDirection("outgoing");
+        await sendFriendRequest(profile.id);
+        showToast("Friend request sent", "success");
+      }
     } catch (err: unknown) {
       setFriendStatus(previous);
+      setFriendRequestDirection(previousDirection);
       showToast(err instanceof Error ? err.message : "Failed to send friend request", "error");
     } finally {
       setFriendLoading(false);
@@ -276,29 +358,49 @@ export default function UserProfilePage() {
           </div>
           {!isOwnProfile && (
             <div className="flex flex-wrap justify-end gap-2">
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-bold transition-all disabled:opacity-60 ${
-                  following
-                    ? "bg-surface text-foreground ring-1 ring-border hover:bg-border"
-                    : "bg-foreground text-background hover:opacity-80"
-                }`}
-              >
-                {followLoading ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
-                {following ? "Unfollow" : "Follow"}
-              </button>
-              {!isFriend && (
+              {(canShowFollowButton || following) && (
                 <button
-                  onClick={handleFriendRequest}
-                  disabled={friendLoading || isFriendPending}
-                  className="flex h-10 items-center gap-1.5 rounded-full bg-surface px-4 text-sm font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                  className={`flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-bold transition-all disabled:opacity-60 ${
+                    following
+                      ? "bg-surface text-foreground ring-1 ring-border hover:bg-border"
+                      : "bg-foreground text-background hover:opacity-80"
+                  }`}
                 >
-                  {friendLoading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
-                  {isFriendPending ? "Request sent" : "Add Friend"}
+                  {followLoading ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                  {following ? "Unfollow" : "Follow"}
                 </button>
               )}
-              {isFriend && (
+              {requestFromProfile ? (
+                <>
+                  <button
+                    onClick={() => handleFriendAction("accept")}
+                    disabled={friendLoading}
+                    className="flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-bold text-white transition-all hover:opacity-80 disabled:opacity-60"
+                  >
+                    {friendLoading ? <Loader2 size={16} className="animate-spin" /> : <UserCheck size={16} />}
+                    Accept
+                  </button>
+                  <button
+                    onClick={() => handleFriendAction("decline")}
+                    disabled={friendLoading}
+                    className="flex h-10 items-center gap-1.5 rounded-full bg-surface px-4 text-sm font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+                  >
+                    Decline
+                  </button>
+                </>
+              ) : (canShowAddFriendButton || isFriend || isFriendPending) ? (
+                <button
+                  onClick={() => handleFriendAction(isFriend ? "remove" : requestToProfile ? "cancel" : "send")}
+                  disabled={friendLoading}
+                  className="flex h-10 items-center gap-1.5 rounded-full bg-surface px-4 text-sm font-bold text-foreground ring-1 ring-border transition-all hover:bg-border disabled:opacity-60"
+                >
+                  {friendLoading ? <Loader2 size={16} className="animate-spin" /> : isFriend ? <UserCheck size={16} /> : <UserPlus size={16} />}
+                  {isFriend ? "Friends" : requestToProfile ? "Cancel request" : isFriendPending ? "Pending" : "Add Friend"}
+                </button>
+              ) : null}
+              {isFriend && canShowMessageButton && (
                 <Link
                   href={`/messages?user=${encodeURIComponent(profile.username)}`}
                   className="flex h-10 items-center gap-1.5 rounded-full bg-accent px-4 text-sm font-bold text-white transition-all hover:opacity-80"
@@ -348,17 +450,55 @@ export default function UserProfilePage() {
           </span>
         </div>
 
-        <div className="mt-4 flex gap-5 text-sm">
+        <div className="mt-4 flex flex-wrap gap-5 text-sm">
           <span className="flex items-center gap-1">
             <strong className="text-foreground">{posts.length}</strong>
             <span className="text-muted">Posts</span>
           </span>
+          <button
+            onClick={() => canViewFollowerList && setSocialList("followers")}
+            disabled={!canViewFollowerList}
+            className="flex items-center gap-1 transition-colors enabled:hover:text-accent disabled:cursor-not-allowed"
+          >
+            <strong className="text-foreground">{canViewFollowerCount ? counts.followers : "—"}</strong>
+            <span className="text-muted">Followers</span>
+          </button>
+          <button
+            onClick={() => canViewFollowingList && setSocialList("following")}
+            disabled={!canViewFollowingList}
+            className="flex items-center gap-1 transition-colors enabled:hover:text-accent disabled:cursor-not-allowed"
+          >
+            <strong className="text-foreground">{canViewFollowingCount ? counts.following : "—"}</strong>
+            <span className="text-muted">Following</span>
+          </button>
+          <button
+            onClick={() => setSocialList("friends")}
+            className="flex items-center gap-1 transition-colors hover:text-accent"
+          >
+            <strong className="text-foreground">{counts.friends}</strong>
+            <span className="text-muted">Friends</span>
+          </button>
           <span className="flex items-center gap-1">
             <strong className="text-foreground">{mediaPosts.length}</strong>
             <span className="text-muted">Media</span>
           </span>
         </div>
       </div>
+
+      <SocialListDialog
+        open={socialList !== null}
+        kind={socialList ?? "followers"}
+        userId={profile.id}
+        username={profile.username}
+        canView={
+          socialList === "followers"
+            ? canViewFollowerList
+            : socialList === "following"
+              ? canViewFollowingList
+              : true
+        }
+        onClose={() => setSocialList(null)}
+      />
 
       {/* Tabs */}
       <div className="flex gap-1 rounded-2xl bg-surface p-1">

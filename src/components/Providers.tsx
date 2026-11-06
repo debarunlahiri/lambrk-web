@@ -53,6 +53,10 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const isLoopMix = pathname === "/loopmix";
   const isMessages = pathname === "/messages" || pathname.startsWith("/messages/");
 
+  if (pathname === "/compass/privacy-policy") {
+    return children;
+  }
+
   return (
     <AuthProvider>
       <WebSocketProvider>

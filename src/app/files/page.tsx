@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
 import {
   Image as ImageIcon,
   Film,
@@ -12,15 +11,12 @@ import {
   Search,
   X,
   ExternalLink,
-  HardDrive,
   FileImage,
   FileVideo,
   UserCircle,
   AlertTriangle,
-  Info,
   RefreshCw,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
 import BackButton from "@/components/BackButton";
 import { StatsSkeleton, FileGridSkeleton } from "@/components/Skeleton";
 import {
@@ -30,7 +26,6 @@ import {
   deleteFile,
   getFileStats,
   searchFiles,
-  ApiError,
   type ApiFile,
   type FileStats,
 } from "@/lib/api";
@@ -60,13 +55,13 @@ function formatDate(dateString: string): string {
 }
 
 export default function FilesPage() {
-  const { isAuthenticated } = useAuth();
   const [files, setFiles] = useState<ApiFile[]>([]);
   const [stats, setStats] = useState<FileStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<FileFilter>("all");
+  const [retryCount, setRetryCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<ApiFile[]>([]);
   const [searchActive, setSearchActive] = useState(false);
@@ -78,38 +73,35 @@ export default function FilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const fetchFiles = () => {
-    setLoading(true);
-    setError("");
-    let promise;
-    if (filter === "all") {
-      promise = listUserFiles(0, 50);
-    } else {
-      promise = listFilesByType(filter, 0, 50);
-    }
-    promise
-      .then((data) => setFiles(data.content))
-      .catch((err) =>
-        setError(err instanceof Error ? err.message : "Failed to load files")
-      )
-      .finally(() => setLoading(false));
-  };
+  useEffect(() => {
+    let ignore = false;
+    const request =
+      filter === "all" ? listUserFiles(0, 50) : listFilesByType(filter, 0, 50);
+
+    request
+      .then((data) => {
+        if (!ignore) setFiles(data.content);
+      })
+      .catch((err: unknown) => {
+        if (!ignore) {
+          setFiles([]);
+          setError(err instanceof Error ? err.message : "Failed to load files");
+        }
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [filter, retryCount]);
 
   useEffect(() => {
     getFileStats()
       .then(setStats)
       .catch(() => {})
       .finally(() => setStatsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (!searchQuery.trim()) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    fetchFiles();
-  }, [filter]);
-
-  useEffect(() => {
-    fetchFiles();
   }, []);
 
   const handleSearch = (query: string) => {
@@ -292,10 +284,12 @@ export default function FilesPage() {
               <button
                 key={f.key}
                 onClick={() => {
-                  setFilter(f.key);
-                  setSearchActive(false);
-                  setSearchQuery("");
-                  setSearchResults([]);
+                  clearSearch();
+                  if (f.key !== filter) {
+                    setLoading(true);
+                    setError("");
+                    setFilter(f.key);
+                  }
                 }}
                 className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                   isActive
@@ -336,7 +330,11 @@ export default function FilesPage() {
           <p className="text-sm font-bold text-foreground">Failed to load files</p>
           <p className="text-xs">{error}</p>
           <button
-            onClick={() => fetchFiles()}
+            onClick={() => {
+              setLoading(true);
+              setError("");
+              setRetryCount((count) => count + 1);
+            }}
             className="mt-2 flex items-center gap-2 rounded-full bg-surface px-5 py-2.5 text-xs font-bold transition-all hover:bg-border active:scale-95"
           >
             <RefreshCw size={14} />

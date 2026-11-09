@@ -21,6 +21,9 @@ const protectedRoutes = [
   "/settings",
 ];
 
+// Public pages rendered without the app shell (no sidebar, nav or auth providers).
+const standalonePages = ["/compass/privacy-policy", "/stride/privacy-policy"];
+
 function AuthRouteHandler() {
   const router = useRouter();
   const pathname = usePathname();
@@ -53,7 +56,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   const isLoopMix = pathname === "/loopmix";
   const isMessages = pathname === "/messages" || pathname.startsWith("/messages/");
 
-  if (pathname === "/compass/privacy-policy") {
+  if (standalonePages.includes(pathname)) {
     return children;
   }
 

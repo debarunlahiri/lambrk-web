@@ -22,7 +22,11 @@ const protectedRoutes = [
 ];
 
 // Public pages rendered without the app shell (no sidebar, nav or auth providers).
-const standalonePages = ["/compass/privacy-policy", "/stride/privacy-policy"];
+const standalonePages = [
+  "/compass/privacy-policy",
+  "/splitease/privacy-policy",
+  "/stride/privacy-policy",
+];
 
 function AuthRouteHandler() {
   const router = useRouter();

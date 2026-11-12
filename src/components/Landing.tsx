@@ -115,6 +115,7 @@ const products: Product[] = [
     meta: ["Web", "Works on any device"],
     href: "https://laidoffcircle.com/",
     cta: "Visit LaidOffCircle",
+    icon: { src: "/products/laidoffcircle-icon.png", width: 512, height: 512 },
     tint: "#e0703a",
   },
 ];

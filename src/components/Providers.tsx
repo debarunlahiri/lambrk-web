@@ -54,11 +54,46 @@ function AuthRouteHandler() {
   return null;
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { isAuthenticated } = useAuth();
   const isAuthPage = pathname === "/login" || pathname === "/register";
   const isLoopMix = pathname === "/loopmix";
   const isMessages = pathname === "/messages" || pathname.startsWith("/messages/");
+
+  // Signed-out visitors get the full-width landing page at "/", without the app shell.
+  if (pathname === "/" && !isAuthenticated) {
+    return children;
+  }
+
+  return (
+    <>
+      {/* Sidebar on desktop */}
+      <Sidebar />
+
+      {/* Top nav — hidden on mobile loopmix via CSS */}
+      <TopNav />
+
+      {/* Main content — shifts right on desktop for sidebar */}
+      <main className={`flex-1 ${isAuthPage ? "" : "md:ml-[72px] lg:ml-64"}`}>
+        {isMessages ? (
+          <div className="px-4 pb-4 pt-4 md:pt-6">
+            {children}
+          </div>
+        ) : (
+          <div className={`mx-auto w-full max-w-3xl ${isLoopMix ? "" : "px-4 pb-24 pt-4 md:pt-6"}`}>
+            {children}
+          </div>
+        )}
+      </main>
+
+      <BottomNav />
+    </>
+  );
+}
+
+export default function Providers({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
 
   if (standalonePages.includes(pathname)) {
     return children;
@@ -69,30 +104,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       <WebSocketProvider>
         <ToastProvider>
           <AuthRouteHandler />
-
-          {/* Sidebar on desktop */}
-          <Sidebar />
-
-          {/* Top nav — hidden on mobile loopmix via CSS */}
-          <TopNav />
-
-          {/* Main content — shifts right on desktop for sidebar */}
-          <main className={`flex-1 ${isAuthPage ? "" : "md:ml-[72px] lg:ml-64"}`}>
-            {isMessages ? (
-              <div className="px-4 pb-4 pt-4 md:pt-6">
-                {children}
-              </div>
-            ) : (
-              <div className={`mx-auto w-full max-w-3xl ${isLoopMix ? "" : "px-4 pb-24 pt-4 md:pt-6"}`}>
-                {children}
-              </div>
-            )}
-          </main>
-
-          <BottomNav />
+          <AppShell>{children}</AppShell>
         </ToastProvider>
       </WebSocketProvider>
     </AuthProvider>
   );
 }
-

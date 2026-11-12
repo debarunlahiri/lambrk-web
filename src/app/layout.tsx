@@ -16,10 +16,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Lambrk",
   description: "Share your moments with the world",
-  icons: {
-    icon: "/lambrk.png",
-    apple: "/lambrk.png",
-  },
 };
 
 export default function RootLayout({
